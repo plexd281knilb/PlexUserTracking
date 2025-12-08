@@ -1,26 +1,23 @@
-# PlexPayments
+# PlexUserTracking
 
-PlexPayments scans multiple IMAP inboxes (PayPal, Venmo, Zelle forwarded SMS), extracts payment info, and writes deduplicated rows to `/data/payments.csv`.
+A dashboard + backend for tracking donations/payments (PayPal, Venmo, Zelle via email/SMS forwarding),
+managing users, and integrating with Tautulli for access control.
 
 ## Quickstart (Unraid)
 
-1. Clone repo to your Unraid appdata or work folder.
-2. Copy `config/sample_settings.yaml` → `config/settings.yaml`, then edit with real IMAP credentials.
-   - For Gmail accounts, use an App Password.
-3. (Optional) Edit docker-compose.yml or use Unraid Docker build.
-4. Build container:
-5. Run:
-The container runs cron and executes `main.py` every day at 6pm minutes. Logs in `./logs/plexpayments.log`.
-6. Check `/data/payments.csv` for parsed payments.
+1. Clone repo to Unraid appdata or working folder.
+2. Edit `backend/config.example.env` values or set environment variables in docker-compose.yml.
+3. Build and run:
+4. Open dashboard: `http://<unraid-ip>:3000`
+Backend API: `http://<unraid-ip>:8080/api/...` (used by frontend)
+5. In the UI:
+- Add email accounts (IMAP credentials)
+- Add users or sync from Tautulli
+- Run "Run Scan Now" to pull new payments
+- Match payments to users (click on payments -> match)
+- Set settings (scan interval, grace days, SMTP settings)
 
 ## Notes
-- Keep `config/settings.yaml` secret — it's listed in `.gitignore`.
-- Tune `search_term` for each mailbox (IMAP search syntax).
-- If Zelle uses SMS forwarded to email, set that forwarding to one of the monitored inboxes.
-
-## Next steps
-- Add user matching (map payer → Plex username)
-- Add reminder emails
-- Add Tautulli integration to revoke access
-
-
+- Database is SQLite: `/backend/data/plexusertracking.db`
+- Keep your IMAP passwords and SMTP credentials secure.
+- For Gmail accounts, use App Passwords.

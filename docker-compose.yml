@@ -1,0 +1,29 @@
+version: "3.8"
+services:
+  backend:
+    build: ./backend
+    container_name: plexusertracking-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend/data:/data
+    environment:
+      - WEB_PORT=8080
+      - SCAN_INTERVAL_MIN=10
+      - GRACE_DAYS=7
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USER=youremail@example.com
+      - SMTP_PASSWORD=app_password
+      - EMAIL_FROM="PlexAdmin <youremail@example.com>"
+      - TAUTULLI_URL=http://tautulli.local:8181
+      - TAUTULLI_API_KEY=your_tautulli_apikey
+      - PP_DB_PATH=/data/plexusertracking.db
+
+  frontend:
+    build: ./frontend
+    container_name: plexusertracking-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
