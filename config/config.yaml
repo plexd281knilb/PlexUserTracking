@@ -1,0 +1,23 @@
+emails:
+  - address: "dominicmjuliano@gmail.com"
+    password: "nsop aqtf cnih iayp"
+    imap_server: "imap.gmail.com"
+    folder: "INBOX"
+    type: "paypal"
+    search_term: "FROM paypal"
+
+  - address: "d281knilb@gmail.com"
+    password: "yyrg rfye xndt yjlh"
+    imap_server: "imap.gmail.com"
+    folder: "INBOX"
+    type: "venmo"
+    search_term: "FROM Venmo"
+
+  - address: "d281knilb@gmail.com"
+    password: "yyrg rfye xndt yjlh"
+    imap_server: "imap.gmail.com"
+    folder: "INBOX"
+    type: "zelle"
+    search_term: "Zelle"
+
+output_file: "/data/payments.csv"
