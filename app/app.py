@@ -10,13 +10,27 @@ def load_config():
         return yaml.safe_load(f)
 
 def append_to_csv(csv_path, rows):
-    file_exists = os.path.isfile(csv_path)
+    existing = set()
+
+    # Load existing entries to avoid duplicates
+    if os.path.isfile(csv_path):
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                key = (row["service"], row["subject"], row["from"], row["date"])
+                existing.add(key)
+
+    # Append new rows if not duplicates
     with open(csv_path, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["service", "subject", "from", "date"])
-        if not file_exists:
+        writer = csv.DictWriter(f, fieldnames=["service", "amount", "payer", "subject", "from", "date"])
+        if os.stat(csv_path).st_size == 0:
             writer.writeheader()
+
         for row in rows:
-            writer.writerow(row)
+            key = (row["service"], row["subject"], row["from"], row["date"])
+            if key not in existing:
+                writer.writerow(row)
+
 
 def main():
     config = load_config()

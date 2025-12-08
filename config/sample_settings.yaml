@@ -1,0 +1,24 @@
+# Copy this to /config/settings.yaml and fill with your real credentials (do NOT commit real file)
+emails:
+  - address: "your-paypal-email@gmail.com"
+    password: "APP_PASSWORD_HERE"
+    imap_server: "imap.gmail.com"
+    folder: "INBOX"
+    type: "paypal"
+    search_term: 'FROM "paypal"'
+
+  - address: "your-venmo-email@gmail.com"
+    password: "APP_PASSWORD_HERE"
+    imap_server: "imap.gmail.com"
+    folder: "INBOX"
+    type: "venmo"
+    search_term: 'BODY "Venmo"'
+
+  - address: "zelle-forward@yourdomain.com"
+    password: "APP_PASSWORD_HERE"
+    imap_server: "imap.gmail.com"
+    folder: "INBOX"
+    type: "zelle"
+    search_term: 'BODY "Zelle"'
+
+output_file: "/data/payments.csv"
