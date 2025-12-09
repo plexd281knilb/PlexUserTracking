@@ -1,51 +1,36 @@
-# update_ports_fixed.ps1
-# Ensures directories exist, then updates files with backend:5052, frontend:8082
+# update_ports.ps1
+# PowerShell script to update PlexUserTracking ports and config for Unraid Docker
 
-Write-Host "Updating PlexUserTracking project ports..."
+# --- Configurable Variables ---
+$backendPort = 5052
+$frontendPort = 8082
+$hostIP = "192.168.1.87"  # Change this to your server IP if needed
 
-# ---- Ensure directories exist ----
-$dirs = @(".\backend", ".\frontend")
-foreach ($d in $dirs) {
-    if (-not (Test-Path $d)) {
-        New-Item -ItemType Directory -Path $d | Out-Null
-        Write-Host "Created missing directory: $d"
-    }
+# --- Paths ---
+$dockerComposePath = ".\docker-compose.yml"
+$nginxConfPath = ".\frontend\nginx.conf"
+$apiFilePath = ".\frontend\src\api.js"
+$menuFilePath = ".\frontend\src\components\Menu.js"
+
+# --- Update docker-compose.yml ---
+if (Test-Path $dockerComposePath) {
+    $composeContent = Get-Content $dockerComposePath
+
+    # Update frontend port
+    $composeContent = $composeContent -replace '(?<=- ")\d+:80"', "${frontendPort}:80`""
+    # Update backend port
+    $composeContent = $composeContent -replace '(?<=- ")\d+:5000"', "${backendPort}:5052`""
+    # Use bridge network
+    $composeContent = $composeContent -replace '(?<=networks:\s+)\w+', "bridge"
+
+    Set-Content -Path $dockerComposePath -Value $composeContent
+    Write-Host "docker-compose.yml updated."
+} else {
+    Write-Host "docker-compose.yml not found!"
 }
 
-# ---- 1️⃣ Backend app.py ----
-$backendApp = @"
-from flask import Flask
-
-def create_app():
-    app = Flask(__name__)
-    return app
-
-if __name__ == '__main__':
-    app = create_app()
-    app.run(host='0.0.0.0', port=5052, debug=True)
-"@
-Set-Content -Path ".\backend\app.py" -Value $backendApp -Force
-Write-Host "Updated backend/app.py to port 5052"
-
-# ---- 2️⃣ Backend Dockerfile ----
-$backendDockerfile = @"
-FROM python:3.11-slim
-
-WORKDIR /app
-COPY . /app
-
-RUN apt-get update && apt-get install -y --no-install-recommends cron && rm -rf /var/lib/apt/lists/*
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
-
-EXPOSE 5052
-
-CMD [\"python\", \"app.py\"]
-"@
-Set-Content -Path ".\backend\Dockerfile" -Value $backendDockerfile -Force
-Write-Host "Updated backend/Dockerfile to expose 5052"
-
-# ---- 3️⃣ Frontend Nginx config ----
-$nginxConf = @"
+# --- Update frontend nginx.conf ---
+$nginxConfContent = @"
 server {
     listen 80;
 
@@ -59,7 +44,7 @@ server {
 
     # Proxy API requests to backend
     location /api/ {
-        proxy_pass http://plexusertracking-backend:5052/;
+        proxy_pass http://${hostIP}:${backendPort}/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -73,35 +58,35 @@ server {
     }
 }
 "@
-Set-Content -Path ".\frontend\nginx.conf" -Value $nginxConf -Force
-Write-Host "Updated frontend/nginx.conf to proxy backend:5052"
 
-# ---- 4️⃣ Docker Compose ----
-$dockerCompose = @"
-version: '3.9'
+if (Test-Path $nginxConfPath) {
+    Set-Content -Path $nginxConfPath -Value $nginxConfContent
+    Write-Host "frontend/nginx.conf updated."
+} else {
+    Write-Host "frontend/nginx.conf not found!"
+}
 
-services:
-  backend:
-    build: ./backend
-    container_name: plexusertracking-backend
-    ports:
-      - "5052:5052"
-    networks:
-      - bridge
+# --- Update frontend API calls ---
+if (Test-Path $apiFilePath) {
+    $apiContent = Get-Content $apiFilePath
+    $apiContent = $apiContent -replace "http://.*?:\d+/api", "http://${hostIP}:${backendPort}/api"
+    Set-Content -Path $apiFilePath -Value $apiContent
+    Write-Host "frontend/src/api.js updated with new backend URL."
+} else {
+    Write-Host "frontend/src/api.js not found!"
+}
 
-  frontend:
-    build: ./frontend
-    container_name: plexusertracking-frontend
-    ports:
-      - "8082:80"
-    networks:
-      - bridge
+# --- Update menu highlight logic ---
+if (Test-Path $menuFilePath) {
+    $menuContent = Get-Content $menuFilePath
 
-networks:
-  bridge:
-    external: true
-"@
-Set-Content -Path ".\docker-compose.yml" -Value $dockerCompose -Force
-Write-Host "Updated docker-compose.yml with backend:5052 and frontend:8082 using bridge network"
+    # Ensure menu highlights active page
+    $menuContent = $menuContent -replace 'className="menu-item"', 'className={`menu-item ${window.location.pathname.includes(to) ? "active" : ""}`}'
+    
+    Set-Content -Path $menuFilePath -Value $menuContent
+    Write-Host "frontend/src/components/Menu.js updated for active page highlighting."
+} else {
+    Write-Host "frontend/src/components/Menu.js not found!"
+}
 
-Write-Host "All files updated successfully."
+Write-Host "All updates complete! Please rebuild your Docker containers on the Unraid server."
