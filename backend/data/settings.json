@@ -1,0 +1,17 @@
+﻿{
+    ""dark_mode"": false,
+    ""scan_interval"": 60,
+    ""grace_days"": 7,
+    ""port"": 5000,
+    ""tautulli"": {
+        ""url"": "",
+        ""api_key"": ""
+    },
+    ""email_notifications"": {
+        ""enabled"": false,
+        ""smtp_server"": "",
+        ""smtp_port"": 587,
+        ""username"": "",
+        ""password"": ""
+    }
+}
