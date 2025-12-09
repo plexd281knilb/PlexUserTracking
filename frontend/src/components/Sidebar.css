@@ -1,28 +1,33 @@
+/* frontend/src/components/Sidebar.css */
 .sidebar {
-    width: 220px;
-    background-color: #1e1e2f;
+    width: 200px;
+    background: #1f2937;
+    color: white;
     display: flex;
     flex-direction: column;
     padding: 20px;
-    min-height: 100vh;
-}
-
-.sidebar a {
-    color: #cfcfd0;
+  }
+  
+  .sidebar a {
+    color: white;
     text-decoration: none;
-    margin-bottom: 15px;
-    font-weight: 500;
-    transition: color 0.2s;
-}
-
-.sidebar a:hover {
-    color: #ffffff;
-}
-
-.sidebar a.active {
-    color: #ffffff;
+    padding: 10px 5px;
+    display: block;
+    border-radius: 4px;
+    margin-bottom: 5px;
+  }
+  
+  .sidebar a.active {
+    background-color: #4f46e5;
+  }
+  
+  .payments-section, .admin-section {
+    margin-top: 20px;
+  }
+  
+  .payments-section span, .admin-section span {
     font-weight: bold;
-    background-color: #3a3a5c;
-    padding: 5px 10px;
-    border-radius: 5px;
-}
+    display: block;
+    margin-bottom: 5px;
+  }
+  
