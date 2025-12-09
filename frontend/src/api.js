@@ -1,26 +1,22 @@
 const BASE = ''
 
-export async function apiGet(path){
-  const r = await fetch(BASE + path)
+export async function apiGet(path, token){
+  const headers = token ? {'X-Admin-Token': token} : {}
+  const r = await fetch(BASE + path, {headers})
+  if (!r.ok) throw new Error('API error ' + r.status)
   return await r.json()
 }
-export async function apiPost(path, body){
-  const r = await fetch(BASE + path, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(body)
-  })
+
+export async function apiPost(path, body, token){
+  const headers = {'Content-Type':'application/json'}
+  if (token) headers['X-Admin-Token'] = token
+  const r = await fetch(path, {method:'POST', headers, body: JSON.stringify(body)})
   return await r.json()
 }
-export async function apiPut(path, body){
-  const r = await fetch(BASE + path, {
-    method: 'PUT',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(body)
-  })
-  return r.ok
-}
-export async function apiDelete(path){
-  const r = await fetch(BASE + path, { method: 'DELETE' })
-  return r.ok
+
+export async function apiPut(path, body, token){
+  const headers = {'Content-Type':'application/json'}
+  if (token) headers['X-Admin-Token'] = token
+  const r = await fetch(path, {method:'PUT', headers, body: JSON.stringify(body)})
+  return await r.json()
 }

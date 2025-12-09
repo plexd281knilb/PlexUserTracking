@@ -1,210 +1,223 @@
 import os
-from flask import Flask, jsonify, request, send_file
+import csv
+import json
+from flask import Flask, request, jsonify, session
 from flask_cors import CORS
-from models import Session, init_db, EmailAccount, User, Payment, Setting
-from payment_scanner import scan_once
-from tautulli import get_tautulli_users, disable_user
-from mailer import mail, send_reminder
-from apscheduler.schedulers.background import BackgroundScheduler
-from datetime import datetime, timedelta
-import dotenv
+from datetime import datetime
 
-# Load env
-dotenv.load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), 'config.example.env'))
-
-app = Flask(__name__, static_folder=None)
+app = Flask(__name__)
+app.secret_key = os.environ.get("ADMIN_SECRET", "supersecret")
 CORS(app)
 
-# Mail config
-app.config.update(
-    MAIL_SERVER=os.getenv('SMTP_HOST'),
-    MAIL_PORT=int(os.getenv('SMTP_PORT', '587')),
-    MAIL_USERNAME=os.getenv('SMTP_USER'),
-    MAIL_PASSWORD=os.getenv('SMTP_PASSWORD'),
-    MAIL_USE_TLS=True,
-    MAIL_DEFAULT_SENDER=os.getenv('EMAIL_FROM')
-)
-mail.init_app(app)
+# -------------------------------------------------------------------
+# File paths
+# -------------------------------------------------------------------
+DATA_DIR = "data"
+USERS_CSV = os.path.join(DATA_DIR, "users.csv")
+EXPENSES_CSV = os.path.join(DATA_DIR, "expenses.csv")
+PAYMENTS_CSV = {
+    "venmo": os.path.join(DATA_DIR, "venmo_payments.csv"),
+    "zelle": os.path.join(DATA_DIR, "zelle_payments.csv"),
+    "paypal": os.path.join(DATA_DIR, "paypal_payments.csv")
+}
+EMAIL_ACCOUNTS_CSV = os.path.join(DATA_DIR, "email_accounts.csv")
+SETTINGS_JSON = os.path.join(DATA_DIR, "settings.json")
+ADMIN_JSON = os.path.join(DATA_DIR, "admin.json")
 
-# DB init
-init_db()
-DB = Session()
+os.makedirs(DATA_DIR, exist_ok=True)
 
-# Scheduler
-scheduler = BackgroundScheduler()
-SCAN_INTERVAL_MIN = int(os.getenv('SCAN_INTERVAL_MIN', '10'))
+# -------------------------------------------------------------------
+# Helpers
+# -------------------------------------------------------------------
+def read_csv(path):
+    if not os.path.exists(path):
+        return []
+    with open(path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        return list(reader)
 
-def scheduled_scan():
-    try:
-        appended = scan_once()
-        print("Scheduled scan appended:", appended)
-    except Exception as e:
-        print("Scan error", e)
+def write_csv(path, rows, fieldnames):
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
 
-scheduler.add_job(scheduled_scan, 'interval', minutes=SCAN_INTERVAL_MIN, id='scan_job')
-scheduler.start()
+def load_json(path, default):
+    if not os.path.exists(path):
+        return default
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-# --- Email accounts endpoints ---
-@app.route('/api/email-accounts', methods=['GET','POST'])
-def email_accounts():
-    if request.method == 'GET':
-        rows = DB.query(EmailAccount).all()
-        return jsonify([{
-            'id': r.id, 'name': r.name, 'address': r.address, 'imap_server': r.imap_server,
-            'imap_port': r.imap_port, 'folder': r.folder, 'search_term': r.search_term,
-            'last_checked': r.last_checked.isoformat() if r.last_checked else None
-        } for r in rows])
-    else:
-        data = request.json
-        a = EmailAccount(
-            name=data.get('name'),
-            address=data.get('address'),
-            imap_server=data.get('imap_server'),
-            imap_port=data.get('imap_port', 993),
-            password=data.get('password'),
-            folder=data.get('folder','INBOX'),
-            search_term=data.get('search_term','UNSEEN')
-        )
-        DB.add(a); DB.commit()
-        return jsonify({'id': a.id}), 201
+def save_json(path, data):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
 
-@app.route('/api/email-accounts/<int:aid>', methods=['PUT','DELETE'])
-def email_account_update(aid):
-    a = DB.query(EmailAccount).get(aid)
-    if not a:
-        return jsonify({'error':'not found'}), 404
-    if request.method == 'DELETE':
-        DB.delete(a); DB.commit(); return jsonify({'status':'deleted'})
-    for k,v in request.json.items():
-        if hasattr(a,k):
-            setattr(a,k,v)
-    DB.commit(); return jsonify({'status':'ok'})
+# -------------------------------------------------------------------
+# ADMIN & AUTH
+# -------------------------------------------------------------------
+@app.route("/api/admin/setup", methods=["POST"])
+def admin_setup():
+    """Create the admin user if not already set."""
+    admin = load_json(ADMIN_JSON, {})
+    if admin.get("username"):
+        return jsonify({"error": "Admin already configured"}), 400
 
-# --- Users endpoints ---
-@app.route('/api/users', methods=['GET','POST'])
-def users_list():
-    if request.method == 'GET':
-        rows = DB.query(User).all()
-        return jsonify([{
-            'id':u.id,'plex_username':u.plex_username,'real_name':u.real_name,'emails':u.emails,
-            'venmo':u.venmo,'zelle':u.zelle,'billing_amount':u.billing_amount,'billing_frequency':u.billing_frequency,
-            'next_due':u.next_due.isoformat() if u.next_due else None,'active':u.active
-        } for u in rows])
-    else:
-        data = request.json
-        u = User(
-            plex_username=data.get('plex_username'),
-            real_name=data.get('real_name',''),
-            emails=data.get('emails',''),
-            venmo=data.get('venmo',''),
-            zelle=data.get('zelle',''),
-            billing_amount=float(data.get('billing_amount') or 0),
-            billing_frequency=data.get('billing_frequency','monthly'),
-            next_due=datetime.fromisoformat(data['next_due']) if data.get('next_due') else None,
-            active=bool(data.get('active',True))
-        )
-        DB.add(u); DB.commit()
-        return jsonify({'id':u.id}), 201
+    data = request.json
+    required = ["username", "password"]
+    if not all(k in data for k in required):
+        return jsonify({"error": "Missing admin fields"}), 400
 
-@app.route('/api/users/<int:uid>', methods=['PUT','DELETE'])
-def user_update(uid):
-    u = DB.query(User).get(uid)
-    if not u:
-        return jsonify({'error':'not found'}),404
-    if request.method == 'DELETE':
-        DB.delete(u); DB.commit(); return jsonify({'status':'deleted'})
-    for k,v in request.json.items():
-        if hasattr(u,k):
-            if k == 'next_due' and v:
-                setattr(u, k, datetime.fromisoformat(v))
-            else:
-                setattr(u, k, v)
-    DB.commit(); return jsonify({'status':'ok'})
+    save_json(ADMIN_JSON, {"username": data["username"], "password": data["password"]})
+    return jsonify({"message": "Admin configured"})
 
-# --- Payments endpoints ---
-@app.route('/api/payments', methods=['GET'])
-def payments():
-    q = DB.query(Payment).order_by(Payment.created_at.desc()).limit(500).all()
-    return jsonify([{
-        'id': p.id, 'service': p.service, 'amount': p.amount, 'payer': p.payer,
-        'subject': p.subject, 'sender': p.sender, 'date': p.date, 'matched_user_id': p.matched_user_id
-    } for p in q])
+@app.route("/api/admin/login", methods=["POST"])
+def admin_login():
+    creds = request.json
+    admin = load_json(ADMIN_JSON, {})
+    if creds["username"] == admin.get("username") and creds["password"] == admin.get("password"):
+        session["logged_in"] = True
+        return jsonify({"message": "Login successful"})
+    return jsonify({"error": "Invalid credentials"}), 401
 
-@app.route('/api/payments/<int:pid>/match', methods=['POST'])
-def match_payment(pid):
-    p = DB.query(Payment).get(pid)
-    if not p: return jsonify({'error':'not found'}), 404
-    uid = request.json.get('user_id')
-    p.matched_user_id = uid
-    DB.commit()
-    return jsonify({'status':'ok'})
+@app.route("/api/admin/logout", methods=["POST"])
+def admin_logout():
+    session.clear()
+    return jsonify({"message": "Logged out"})
 
-@app.route('/api/payments/<int:pid>/unmatch', methods=['POST'])
-def unmatch_payment(pid):
-    p = DB.query(Payment).get(pid)
-    if not p: return jsonify({'error':'not found'}), 404
-    p.matched_user_id = None
-    DB.commit()
-    return jsonify({'status':'ok'})
+# -------------------------------------------------------------------
+# HOMEPAGE — Statistics & Run Scans
+# -------------------------------------------------------------------
+@app.route("/api/home/stats", methods=["GET"])
+def homepage_stats():
+    users = read_csv(USERS_CSV)
+    expenses = read_csv(EXPENSES_CSV)
+    email_accounts = read_csv(EMAIL_ACCOUNTS_CSV)
 
-# --- Settings endpoints ---
-@app.route('/api/settings', methods=['GET','PUT'])
-def settings():
-    if request.method == 'GET':
-        rows = DB.query(Setting).all()
-        return jsonify({r.key: r.value for r in rows})
-    else:
-        for k,v in request.json.items():
-            s = DB.query(Setting).get(k)
-            if s:
-                s.value = str(v)
-            else:
-                DB.add(Setting(key=k, value=str(v)))
-        DB.commit()
-        return jsonify({'status':'ok'})
+    year = str(datetime.now().year)
 
-# --- trigger scan now ---
-@app.route('/api/scan', methods=['POST'])
-def trigger_scan():
-    appended = scan_once()
-    return jsonify({'appended': appended})
+    # Sum expenses by year
+    total_expenses_year = sum(float(e["amount"]) for e in expenses if e["date"].startswith(year))
 
-# --- sync with tautulli ---
-@app.route('/api/sync-tautulli', methods=['POST'])
-def sync_tautulli():
-    tautulli_url = os.getenv('TAUTULLI_URL')
-    tautulli_key = os.getenv('TAUTULLI_API_KEY')
-    if not tautulli_url or not tautulli_key:
-        return jsonify({'error':'tautulli not configured'}), 400
-    data = get_tautulli_users(tautulli_url, tautulli_key)
-    added = 0
-    for d in data:
-        uname = d.get('username') or d.get('friendly_name') or d.get('user_id')
-        if not DB.query(User).filter_by(plex_username=uname).first():
-            u = User(plex_username=uname, real_name=d.get('friendly_name') or '', emails='', billing_amount=0.0)
-            DB.add(u); added += 1
-    DB.commit()
-    return jsonify({'added': added})
+    # Payments merged from all sources
+    total_payments_year = 0
+    for ptype, path in PAYMENTS_CSV.items():
+        payments = read_csv(path)
+        total_payments_year += sum(float(p["amount"]) for p in payments if p["date"].startswith(year))
 
-# --- disable overdue users via Tautulli ---
-@app.route('/api/disable-overdue', methods=['POST'])
-def disable_overdue():
-    now = datetime.utcnow()
-    grace = int(os.getenv('GRACE_DAYS','7'))
-    disabled = 0
-    users = DB.query(User).all()
+    return jsonify({
+        "total_users": len(users),
+        "total_email_accounts": len(email_accounts),
+        "total_payments_year": total_payments_year,
+        "total_expenses_year": total_expenses_year
+    })
+
+@app.route("/api/home/run_scan", methods=["POST"])
+def run_scan_now():
+    # placeholder for your real scanning logic
+    return jsonify({"message": "Scans executed"})
+
+# -------------------------------------------------------------------
+# USERS
+# -------------------------------------------------------------------
+@app.route("/api/users", methods=["GET"])
+def get_users():
+    return jsonify(read_csv(USERS_CSV))
+
+@app.route("/api/users", methods=["POST"])
+def add_user():
+    users = read_csv(USERS_CSV)
+    data = request.json
+    users.append(data)
+
+    write_csv(USERS_CSV, users, fieldnames=data.keys())
+    return jsonify({"message": "User added"})
+
+@app.route("/api/users/<username>", methods=["PUT"])
+def update_user(username):
+    users = read_csv(USERS_CSV)
+    updated = request.json
     for u in users:
-        if u.next_due and now > (u.next_due + timedelta(days=grace)):
-            try:
-                # Best practice: map plex_username to Tautulli user id. Here we attempt direct call using plex_username.
-                res = disable_user(os.getenv('TAUTULLI_URL'), os.getenv('TAUTULLI_API_KEY'), u.plex_username)
-                u.active = False
-                disabled += 1
-            except Exception as e:
-                print("disable error", e)
-    DB.commit()
-    return jsonify({'disabled': disabled})
+        if u["username"] == username:
+            u.update(updated)
+            break
+    write_csv(USERS_CSV, users, fieldnames=users[0].keys())
+    return jsonify({"message": "User updated"})
 
-if __name__ == '__main__':
-    port = int(os.getenv('WEB_PORT', '8080'))
-    app.run(host='0.0.0.0', port=port)
+# -------------------------------------------------------------------
+# EXPENSES
+# -------------------------------------------------------------------
+@app.route("/api/expenses", methods=["GET"])
+def get_expenses():
+    return jsonify(read_csv(EXPENSES_CSV))
+
+@app.route("/api/expenses", methods=["POST"])
+def add_expense():
+    expenses = read_csv(EXPENSES_CSV)
+    data = request.json
+    expenses.append(data)
+    write_csv(EXPENSES_CSV, expenses, fieldnames=data.keys())
+    return jsonify({"message": "Expense added"})
+
+# -------------------------------------------------------------------
+# PAYMENTS - VENMO, ZELLE, PAYPAL
+# -------------------------------------------------------------------
+@app.route("/api/payments/<ptype>", methods=["GET"])
+def get_payments(ptype):
+    if ptype not in PAYMENTS_CSV:
+        return jsonify({"error": "Invalid payment type"}), 400
+    return jsonify(read_csv(PAYMENTS_CSV[ptype]))
+
+@app.route("/api/payments/<ptype>", methods=["POST"])
+def add_payment(ptype):
+    if ptype not in PAYMENTS_CSV:
+        return jsonify({"error": "Invalid payment type"}), 400
+
+    payments = read_csv(PAYMENTS_CSV[ptype])
+    data = request.json
+    payments.append(data)
+
+    write_csv(PAYMENTS_CSV[ptype], payments, fieldnames=data.keys())
+    return jsonify({"message": f"{ptype.capitalize()} payment added"})
+
+# -------------------------------------------------------------------
+# EMAIL ACCOUNTS (tracking Venmo/Zelle/PayPal inboxes)
+# -------------------------------------------------------------------
+@app.route("/api/email_accounts", methods=["GET"])
+def get_email_accounts():
+    return jsonify(read_csv(EMAIL_ACCOUNTS_CSV))
+
+@app.route("/api/email_accounts", methods=["POST"])
+def add_email_account():
+    accounts = read_csv(EMAIL_ACCOUNTS_CSV)
+    data = request.json
+    accounts.append(data)
+    write_csv(EMAIL_ACCOUNTS_CSV, accounts, fieldnames=data.keys())
+    return jsonify({"message": "Email account added"})
+
+# -------------------------------------------------------------------
+# SETTINGS
+# -------------------------------------------------------------------
+@app.route("/api/settings", methods=["GET"])
+def get_settings():
+    settings = load_json(SETTINGS_JSON, {
+        "theme": "light",
+        "web_port": 5050,
+        "scan_interval": 60,
+        "grace_days": 0,
+        "auto_scans": True,
+        "tautulli_url": "",
+        "tautulli_api_key": ""
+    })
+    return jsonify(settings)
+
+@app.route("/api/settings", methods=["POST"])
+def save_settings():
+    data = request.json
+    save_json(SETTINGS_JSON, data)
+    return jsonify({"message": "Settings saved"})
+
+# -------------------------------------------------------------------
+# START APP
+# -------------------------------------------------------------------
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)

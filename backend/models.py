@@ -19,6 +19,7 @@ class EmailAccount(Base):
     password = Column(String)
     folder = Column(String, default='INBOX')
     search_term = Column(String, default='UNSEEN')
+    type = Column(String, default='unknown')  # paypal|venmo|zelle or custom
     last_checked = Column(DateTime, nullable=True)
 
 class User(Base):
@@ -30,14 +31,14 @@ class User(Base):
     venmo = Column(String)
     zelle = Column(String)
     billing_amount = Column(Float, default=0.0)
-    billing_frequency = Column(String, default='monthly') # monthly/quarterly/yearly/custom
+    billing_frequency = Column(String, default='monthly')  # monthly/quarterly/yearly/custom
     next_due = Column(DateTime, nullable=True)
     active = Column(Boolean, default=True)
 
 class Payment(Base):
     __tablename__ = 'payments'
     id = Column(Integer, primary_key=True)
-    service = Column(String)
+    service = Column(String)              # 'paypal', 'venmo', 'zelle', or account name
     amount = Column(Float, nullable=True)
     payer = Column(String, nullable=True)
     subject = Column(String, nullable=True)
@@ -48,10 +49,26 @@ class Payment(Base):
     provider_txn = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class Expense(Base):
+    __tablename__ = 'expenses'
+    id = Column(Integer, primary_key=True)
+    date = Column(DateTime, default=datetime.utcnow)
+    description = Column(String)
+    category = Column(String, default='Misc')
+    amount = Column(Float)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class Setting(Base):
     __tablename__ = 'settings'
     key = Column(String, primary_key=True)
     value = Column(String)
+
+class Admin(Base):
+    __tablename__ = 'admin'
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True)
+    password_hash = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 def init_db():
     Base.metadata.create_all(engine)
