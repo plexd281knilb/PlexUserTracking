@@ -1,15 +1,9 @@
-version: "3.9"
-
 services:
   backend:
+    build: ./backend
     container_name: PlexUserTracking-backend
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
     ports:
       - "5050:5000"
-    environment:
-      - TZ=America/Chicago
     volumes:
       - ./backend/config:/config
       - ./backend/data:/data
@@ -17,14 +11,12 @@ services:
     restart: unless-stopped
 
   frontend:
+    build: ./frontend
     container_name: PlexUserTracking-frontend
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "8082:80"
     environment:
       - REACT_APP_API_URL=http://backend:5000
+    ports:
+      - "8082:80"
     depends_on:
       - backend
     restart: unless-stopped
