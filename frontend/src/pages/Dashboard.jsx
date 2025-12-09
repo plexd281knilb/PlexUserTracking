@@ -1,19 +1,12 @@
-﻿import React, { useEffect, useState } from 'react';
-import api from '../api';
+﻿import React from 'react';
 
 const Dashboard = () => {
-  const [summary, setSummary] = useState({});
-
-  useEffect(() => {
-    api.get('/dashboard/summary').then(res => setSummary(res.data));
-  }, []);
-
-  return (
-    <div>
-      <h1>Dashboard</h1>
-      <pre>{JSON.stringify(summary, null, 2)}</pre>
-    </div>
-  );
+    return (
+        <div>
+            <h1>Dashboard</h1>
+            <p>Welcome to the Dashboard page. Here you can see an overview of the system, stats, and important metrics.</p>
+        </div>
+    );
 };
 
 export default Dashboard;

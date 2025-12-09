@@ -1,1 +1,12 @@
-﻿import React from 'react'; const Settings = () => <div><h1>Settings Page</h1></div>; export default Settings;
+﻿import React from 'react';
+
+const Settings = () => {
+    return (
+        <div>
+            <h1>Settings</h1>
+            <p>Adjust system settings and preferences here.</p>
+        </div>
+    );
+};
+
+export default Settings;
