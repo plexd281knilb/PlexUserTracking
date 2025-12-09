@@ -1,12 +1,11 @@
-﻿# backend/routes/settings.py
-from flask import Blueprint, request, jsonify
-from ..models.models_settings import read_settings, write_settings
-bp = Blueprint("settings", __name__, url_prefix="/api/settings")
+﻿from flask import Blueprint, jsonify
 
-@bp.route("/<group>", methods=["GET","POST"])
-def group(group):
-  if request.method=="GET":
-    return jsonify(read_settings(group, {}))
-  data = request.json or {}
-  write_settings(group, data)
-  return jsonify({"ok": True})
+settings_bp = Blueprint('settings', __name__, url_prefix='/api/settings')
+
+@settings_bp.route('', methods=['GET'])
+def get_settings():
+    return jsonify({'dark_mode': False})
+
+@settings_bp.route('', methods=['PUT'])
+def update_settings():
+    return jsonify({'status': 'ok'})
