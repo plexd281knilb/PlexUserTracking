@@ -1,22 +1,12 @@
-version: '3.9'
-
 services:
   backend:
     build: ./backend
     container_name: plexusertracking-backend
     ports:
       - "5052:5052"
-    networks:
-      - bridge
 
   frontend:
     build: ./frontend
     container_name: plexusertracking-frontend
     ports:
       - "8082:80"
-    networks:
-      - bridge
-
-networks:
-  bridge:
-    external: true
