@@ -1,26 +1,22 @@
-server {
-    listen 80;
+# Stage 1: Build React app
+FROM node:20-alpine AS build
 
-    root /usr/share/nginx/html;
-    index index.html index.htm;
+WORKDIR /app
 
-    # Serve React routes
-    location / {
-        try_files $uri /index.html;
-    }
+COPY package.json package-lock.json ./
+RUN npm install --legacy-peer-deps
 
-    # Proxy API requests to backend container
-    location /api/ {
-        proxy_pass http://backend:5000/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
+COPY public ./public
+COPY src ./src
 
-    # Optional: enable gzip
-    gzip on;
-    gzip_types text/plain text/css application/javascript application/json image/svg+xml;
-    gzip_min_length 1000;
-}
+RUN npm run build
+
+# Stage 2: Serve with Nginx
+FROM nginx:stable-alpine
+
+COPY --from=build /app/build /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
