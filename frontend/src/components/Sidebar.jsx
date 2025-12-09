@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { Link } from "react-router-dom";
 export default function Sidebar(){
   return (
@@ -12,7 +12,8 @@ export default function Sidebar(){
         <Link to="/payments/paypal">PayPal</Link>
         <Link to="/expenses">Expenses</Link>
         <Link to="/settings">Settings</Link>
-        <Link to="/admin">Admin</Link>
+        <Link to="/admin/setup">Admin Setup</Link>
+        <Link to="/admin/login">Admin Login</Link>
       </div>
     </div>
   );
