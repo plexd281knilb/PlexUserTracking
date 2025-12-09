@@ -18,4 +18,4 @@ RUN mkdir -p /data /logs
 # Cron job is optional; the scheduler in app.py runs scans. Keep container foregrounded by running the Flask app.
 EXPOSE 8080
 
-CMD ["python", "app.py"]
+CMD ["python", "-m", "app"]
