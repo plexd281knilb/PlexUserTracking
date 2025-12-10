@@ -8,5 +8,5 @@ const PaymentsPayPal = () => {
         </div>
     );
 };
-
+ 
 export default PaymentsPayPal;
