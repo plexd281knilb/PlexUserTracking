@@ -1,31 +1,59 @@
-﻿// frontend/src/components/Sidebar.jsx
-import React from 'react';
-import { NavLink } from 'react-router-dom';
-import './Sidebar.css';
+﻿import React from "react";
+import { NavLink } from "react-router-dom";
+import "./Sidebar.css";
 
-const Sidebar = () => {
+function Sidebar() {
   return (
     <div className="sidebar">
-      <NavLink to="/dashboard" className={({ isActive }) => isActive ? 'active' : ''}>Dashboard</NavLink>
-      <NavLink to="/users" className={({ isActive }) => isActive ? 'active' : ''}>Users</NavLink>
-      
-      <div className="payments-section">
-        <span>Payments</span>
-        <NavLink to="/payments/paypal" className={({ isActive }) => isActive ? 'active' : ''}>PayPal</NavLink>
-        <NavLink to="/payments/venmo" className={({ isActive }) => isActive ? 'active' : ''}>Venmo</NavLink>
-        <NavLink to="/payments/zelle" className={({ isActive }) => isActive ? 'active' : ''}>Zelle</NavLink>
-      </div>
+      <h2 className="sidebar-title">Plex User Tracking</h2>
 
-      <NavLink to="/expenses" className={({ isActive }) => isActive ? 'active' : ''}>Expenses</NavLink>
-      <NavLink to="/settings" className={({ isActive }) => isActive ? 'active' : ''}>Settings</NavLink>
+      <ul className="sidebar-menu">
 
-      <div className="admin-section">
-        <span>Admin</span>
-        <NavLink to="/admin/setup" className={({ isActive }) => isActive ? 'active' : ''}>Setup</NavLink>
-        <NavLink to="/admin/login" className={({ isActive }) => isActive ? 'active' : ''}>Login</NavLink>
-      </div>
+        <li>
+          <NavLink to="/" end>Dashboard</NavLink>
+        </li>
+
+        <li>
+          <NavLink to="/users">Users</NavLink>
+        </li>
+
+        <li className="menu-section">Payments</li>
+        
+        <li>
+          <NavLink to="/payments/venmo">Venmo</NavLink>
+        </li>
+
+        <li>
+          <NavLink to="/payments/zelle">Zelle</NavLink>
+        </li>
+
+        <li>
+          <NavLink to="/payments/paypal">PayPal</NavLink> {/* ✅ FIXED */}
+        </li>
+
+        <li className="menu-section">Management</li>
+
+        <li>
+          <NavLink to="/expenses">Expenses</NavLink>
+        </li>
+
+        <li>
+          <NavLink to="/settings">Settings</NavLink>
+        </li>
+
+        <li className="menu-section">Admin</li>
+
+        <li>
+          <NavLink to="/admin/setup">Admin Setup</NavLink>
+        </li>
+
+        <li>
+          <NavLink to="/admin/login">Admin Login</NavLink>
+        </li>
+
+      </ul>
     </div>
   );
-};
+}
 
 export default Sidebar;
