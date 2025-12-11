@@ -1,30 +1,77 @@
-:root{
-  --bg:#f3f6fb;
-  --card:#ffffff;
-  --muted:#6b7280;
-  --accent:#0ea5e9;
-  --text:#0b1220;
+/* Define color variables for light mode (default) */
+:root {
+  /* Primary Colors */
+  --primary-color: #007bff;
+  --primary-hover-color: #0056b3;
+
+  /* Backgrounds */
+  --background-color: #f8f9fa; /* Light grey/white for body */
+  --secondary-bg-color: #ffffff; /* White for cards/containers */
+  --sidebar-bg-color: #343a40; /* Keeping sidebar dark for contrast */
+
+  /* Text */
+  --text-color: #212529; /* Dark text */
+  --text-muted-color: #6c757d; 
+  --sidebar-text-color: #ffffff;
+  
+  /* Borders/Shadows */
+  --border-color: #dee2e6;
+  --box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
 }
-[data-theme="dark"]{
-  --bg:#07101a;
-  --card:#071828;
-  --muted:#9fb4c9;
-  --accent:#3ad0ff;
-  --text:#e6f6ff;
+
+/* Dark Mode Overrides (Applied when body has class="dark-mode") */
+.dark-mode {
+  /* Backgrounds */
+  --background-color: #121212; /* Very dark grey/black */
+  --secondary-bg-color: #1e1e1e; /* Slightly lighter dark for cards/containers */
+  --sidebar-bg-color: #343a40; /* Keeps sidebar color consistent */
+  
+  /* Text */
+  --text-color: #e0e0e0; /* Light text */
+  --text-muted-color: #a0a0a0; 
+  --border-color: #363636;
+  --box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.3);
 }
-*{box-sizing:border-box}
-body{margin:0;font-family:Inter,system-ui,Arial;background:var(--bg);color:var(--text)}
-.app-root{display:flex;height:100vh}
-.sidebar{width:220px;background:var(--card);padding:18px;border-right:1px solid rgba(0,0,0,0.04)}
-.main{flex:1;display:flex;flex-direction:column}
-.topbar{height:64px;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;background:transparent}
-.content{padding:18px;overflow:auto}
-.card{background:var(--card);padding:12px;border-radius:8px;box-shadow:0 2px 6px rgba(2,6,23,0.04);margin-bottom:12px}
-.nav a{display:block;padding:8px 6px;color:var(--text);text-decoration:none;margin-bottom:6px;border-radius:6px}
-.nav a:hover{background:rgba(0,0,0,0.03)}
-.small{font-size:0.9rem;color:var(--muted)}
-.button{background:var(--accent);color:white;padding:8px 10px;border:none;border-radius:6px;cursor:pointer}
-.input{padding:8px;border-radius:6px;border:1px solid #e6eef6}
-.table{width:100%;border-collapse:collapse}
-.table td,.table th{padding:8px;border-bottom:1px solid #e6eef6}
-.flex{display:flex;gap:8px;align-items:center}
+
+/* Global Styles (Updated to use variables) */
+body {
+  background-color: var(--background-color);
+  color: var(--text-color);
+  margin: 0;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+/* Common container/card style for adaptive background/borders */
+.content-card {
+  background-color: var(--secondary-bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  box-shadow: var(--box-shadow);
+  margin-bottom: 1.5rem;
+}
+
+/* Standard button styles */
+.btn-primary {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-hover-color);
+}
+/* Ensure main content area expands correctly */
+#app-container {
+  display: flex;
+  min-height: 100vh;
+}
+#main-content {
+  flex-grow: 1;
+  margin-left: 250px; /* Offset for sidebar */
+  padding: 20px;
+}
