@@ -66,6 +66,7 @@ const PaymentsPaypal = () => {
         }
     };
 
+    // FIX: Clean dependency array
     useEffect(() => {
         fetchAccounts();
     }, [service]); 

@@ -66,6 +66,7 @@ const PaymentsZelle = () => {
         }
     };
 
+    // FIX: Clean dependency array
     useEffect(() => {
         fetchAccounts();
     }, [service]); 
@@ -103,30 +104,3 @@ const PaymentsZelle = () => {
                                 </tr>
                             ))}
                         </tbody>
-                    </table>
-                )}
-                
-                <div className="flex" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', justifyContent: 'space-between' }}>
-                    <p className="small">{scanMessage || 'Ready to scan.'}</p>
-                    <button className="button" onClick={handleTriggerScan}>Trigger Manual Scan</button>
-                </div>
-            </div>
-
-            <div className="card">
-                <h2>Add New Scanner Account</h2>
-                <form onSubmit={handleAddAccount} style={{ display: 'grid', gap: '15px', gridTemplateColumns: '1fr 1fr' }}>
-                    <input className="input" type="email" name="email" value={newAccount.email} onChange={handleInputChange} placeholder="Email (must allow IMAP)" required />
-                    <input className="input" type="password" name="password" value={newAccount.password} onChange={handleInputChange} placeholder="Password/App Password" required />
-                    <input className="input" type="text" name="imap_server" value={newAccount.imap_server} onChange={handleInputChange} placeholder="IMAP Server (e.g., imap.gmail.com)" required />
-                    <input className="input" type="number" name="port" value={newAccount.port} onChange={handleInputChange} placeholder="Port (e.g., 993)" required />
-                    
-                    <div style={{ gridColumn: 'span 2', textAlign: 'right' }}>
-                        <button type="submit" className="button">Save Account</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-export default PaymentsZelle;

@@ -2,7 +2,8 @@
 import { apiGet, apiPost, apiDelete } from '../../api';
 
 const PaymentsVenmo = () => {
-    const service = 'venmo';
+    const service = 'venmo'; 
+    
     const [accounts, setAccounts] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [scanMessage, setScanMessage] = useState('');
@@ -16,7 +17,6 @@ const PaymentsVenmo = () => {
     const fetchAccounts = async () => {
         setIsLoading(true);
         try {
-            // Note: Assuming API is open to admin access for now
             const response = await apiGet(`/payment_emails/${service}`); 
             setAccounts(response.data);
         } catch (error) {
@@ -65,9 +65,9 @@ const PaymentsVenmo = () => {
         }
     };
 
+    // FIX: The useEffect hook should be clean and use the dependency array.
     useEffect(() => {
         fetchAccounts();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [service]); 
 
     return (
@@ -75,7 +75,6 @@ const PaymentsVenmo = () => {
             <h1>Venmo Email Scanner Configuration</h1>
             <p className="small">Manage the email accounts used to scan for Venmo payment confirmations and mark users as paid.</p>
 
-            {/* --- Account List --- */}
             <div className="card">
                 <h2>Configured Accounts ({service.toUpperCase()})</h2>
                 {isLoading ? (
@@ -107,18 +106,15 @@ const PaymentsVenmo = () => {
                     </table>
                 )}
                 
-                <div className="flex" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', justifyContent: 'space-between', marginTop: '15px' }}>
+                <div className="flex" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', justifyContent: 'space-between' }}>
                     <p className="small">{scanMessage || 'Ready to scan.'}</p>
                     <button className="button" onClick={handleTriggerScan}>Trigger Manual Scan</button>
                 </div>
             </div>
 
-            {/* --- Add New Account Form --- */}
             <div className="card">
                 <h2>Add New Scanner Account</h2>
                 <form onSubmit={handleAddAccount} style={{ display: 'grid', gap: '15px', gridTemplateColumns: '1fr 1fr' }}>
-                    
-                    {/* Input Fields using 'input' class for styling */}
                     <input className="input" type="email" name="email" value={newAccount.email} onChange={handleInputChange} placeholder="Email (must allow IMAP)" required />
                     <input className="input" type="password" name="password" value={newAccount.password} onChange={handleInputChange} placeholder="Password/App Password" required />
                     <input className="input" type="text" name="imap_server" value={newAccount.imap_server} onChange={handleInputChange} placeholder="IMAP Server (e.g., imap.gmail.com)" required />
