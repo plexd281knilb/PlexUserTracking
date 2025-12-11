@@ -1,55 +1,57 @@
 ﻿import React from "react";
 import { NavLink } from "react-router-dom";
-import "./Sidebar.css";
+import "./Sidebar.css"; // Ensure this file exists and contains the base styles
 
 function Sidebar() {
   return (
     <div className="sidebar">
-      <h2 className="sidebar-title">Plex User Tracking</h2>
+      <h2 className="sidebar-header" style={{fontSize: '1.2rem', padding: '0 10px', marginBottom: '20px', color: 'var(--accent)'}}>
+        PLEX TRACKER
+      </h2>
 
-      <ul className="sidebar-menu">
+      <ul className="sidebar-nav">
 
-        <li>
-          <NavLink to="/" end>Dashboard</NavLink>
-        </li>
+        <NavLink to="/" end className={({isActive}) => isActive ? 'active' : ''}>
+          <span className="icon">🏠</span> Dashboard
+        </NavLink>
 
-        <li>
-          <NavLink to="/users">Users</NavLink>
-        </li>
+        <NavLink to="/users" className={({isActive}) => isActive ? 'active' : ''}>
+          <span className="icon">👥</span> Users
+        </NavLink>
 
-        <li className="menu-section">Payments</li>
+        <li className="menu-section">PAYMENTS</li>
         
-        <li>
-          <NavLink to="/payments/venmo">Venmo</NavLink>
-        </li>
+        <NavLink to="/payments/venmo" className={({isActive}) => isActive ? 'active' : ''}>
+          <span className="icon">💳</span> Venmo
+        </NavLink>
 
-        <li>
-          <NavLink to="/payments/zelle">Zelle</NavLink>
-        </li>
+        <NavLink to="/payments/zelle" className={({isActive}) => isActive ? 'active' : ''}>
+          <span className="icon">💳</span> Zelle
+        </NavLink>
 
-        <li>
-          <NavLink to="/payments/paypal">PayPal</NavLink> {/* ✅ FIXED */}
-        </li>
+        <NavLink to="/payments/paypal" className={({isActive}) => isActive ? 'active' : ''}>
+          <span className="icon">💳</span> PayPal
+        </NavLink>
 
-        <li className="menu-section">Management</li>
+        <li className="menu-section">MANAGEMENT</li>
 
-        <li>
-          <NavLink to="/expenses">Expenses</NavLink>
-        </li>
+        <NavLink to="/expenses" className={({isActive}) => isActive ? 'active' : ''}>
+          <span className="icon">💰</span> Expenses
+        </NavLink>
 
-        <li>
-          <NavLink to="/settings">Settings</NavLink>
-        </li>
+        <NavLink to="/settings/display" className={({isActive}) => isActive ? 'active' : ''}>
+          <span className="icon">⚙️</span> Settings
+        </NavLink>
 
-        <li className="menu-section">Admin</li>
+        <li className="menu-section">ADMIN</li>
 
-        <li>
-          <NavLink to="/admin/setup">Admin Setup</NavLink>
-        </li>
+        <NavLink to="/admin/setup" className={({isActive}) => isActive ? 'active' : ''}>
+          <span className="icon">🛠️</span> Setup
+        </NavLink>
 
-        <li>
-          <NavLink to="/admin/login">Admin Login</NavLink>
-        </li>
+        <NavLink to="/admin/login" className={({isActive}) => isActive ? 'active' : ''}>
+          <span className="icon">🔑</span> Login
+        </NavLink>
 
       </ul>
     </div>
