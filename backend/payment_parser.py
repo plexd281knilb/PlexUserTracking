@@ -1,30 +1,31 @@
 import email
-import re
 
 def parse_payment_email(service, msg):
     """
     Parses an email message based on the payment service and extracts key info.
-    
-    This is a stub. Real implementation requires analyzing email senders and body patterns.
+    You will need to expand this logic for production use!
     """
     sender = msg.get('From', '').lower()
     subject = msg.get('Subject', '')
     
-    # Simple placeholder logic:
-    if service == 'venmo' and 'venmo' in sender and 'paid you' in subject:
+    # Placeholder logic to determine if payment was received
+    if service == 'venmo' and ('@venmo.com' in sender or 'venmo' in subject.lower()) and 'paid you' in subject.lower():
+        # In a real app, you would parse the body to find the user's name/email and amount
         return {
             'status': 'Paid',
-            'amount': 25.00, # Placeholder
-            'recipient_email': 'user@example.com' # Must extract the actual Plex user's email/identifier
+            'recipient_email': 'user_email_to_match_in_users_json@example.com' 
         }
     
-    if service == 'zelle' and 'zelle' in sender and 'money received' in subject:
+    if service == 'zelle' and ('zellepay.com' in sender or 'money received' in subject.lower()):
         return {
             'status': 'Paid',
-            'amount': 25.00,
-            'recipient_email': 'user@example.com' 
+            'recipient_email': 'user_email_to_match_in_users_json@example.com' 
         }
 
-    # ... and so on for PayPal
+    if service == 'paypal' and ('service@paypal.com' in sender and 'money received' in subject.lower()):
+        return {
+            'status': 'Paid',
+            'recipient_email': 'user_email_to_match_in_users_json@example.com' 
+        }
 
     return None

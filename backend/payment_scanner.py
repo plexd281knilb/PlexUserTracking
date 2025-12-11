@@ -1,12 +1,10 @@
 import imaplib
 import email
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
+import time
 from .database import load_payment_accounts, save_payment_accounts, load_users, save_users
 from .payment_parser import parse_payment_email
-
-# NOTE: This uses imaplib, which is typically standard in Python. 
-# Make sure to configure your email accounts to allow "less secure apps" or use App Passwords.
 
 def connect_to_imap(account):
     """Establishes an IMAP connection."""
@@ -24,6 +22,10 @@ def scan_for_payments(service):
     users = load_users()
     payment_count = 0
 
+    # Define search date (e.g., search messages from the last 7 days)
+    search_date_dt = datetime.now() - timedelta(days=7)
+    search_date = search_date_dt.strftime('%d-%b-%Y')
+
     for account in accounts:
         if not account.get('enabled'):
             continue
@@ -35,14 +37,8 @@ def scan_for_payments(service):
         try:
             mail.select('inbox')
             
-            # Search for emails since the last scan date, or a default period
-            since_date = datetime.strptime(account['last_scanned'], '%Y-%m-%d %H:%M:%S') if account.get('last_scanned') else datetime.now()
-            search_date = since_date.strftime('%d-%b-%Y')
-            
-            # Simplified search for payment emails (adapt based on service)
-            # You would need specific senders for Venmo/Zelle/Paypal
-            # For simplicity here, we'll search recent messages.
-            status, email_ids = mail.search(None, 'ALL') 
+            # Search for messages received since search_date
+            status, email_ids = mail.search(None, f'(SINCE "{search_date}")')
             
             if status == 'OK':
                 for e_id in email_ids[0].split():
@@ -51,23 +47,19 @@ def scan_for_payments(service):
                         continue
                         
                     msg = email.message_from_bytes(msg_data[0][1])
-                    
-                    # This function is assumed to be defined externally and extracts payment info
                     payment_info = parse_payment_email(service, msg)
                     
                     if payment_info and payment_info['status'] == 'Paid':
-                        # Find user by email or identifier
+                        # Match user by email/identifier from the payment email
                         user = next((u for u in users if u['email'].lower() == payment_info['recipient_email'].lower()), None)
                         
                         if user:
-                            # Mark user as paid for the current cycle
                             user['last_paid'] = datetime.now().strftime('%Y-%m-%d')
-                            user['status'] = 'Active'
+                            user['status'] = 'Active' # Mark as Active after payment
                             payment_count += 1
                         
-                        # Optionally mark the email as "Read" or move it to a "Processed" folder
-            
-            # Update last scanned time
+                        # Optionally mark email as read or move it to a processed folder here
+
             account['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         except Exception as e:

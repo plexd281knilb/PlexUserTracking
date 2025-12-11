@@ -1,5 +1,5 @@
 ﻿from flask import Blueprint, jsonify, request
-from ..database import load_payment_accounts, add_account, get_account_by_id, save_payment_accounts
+from ..database import load_payment_accounts, add_account, save_payment_accounts
 from ..payment_scanner import scan_for_payments
 
 payments_bp = Blueprint('payments', __name__, url_prefix='/api/payment_emails')
@@ -18,6 +18,7 @@ def get_accounts(service):
 def create_account(service):
     """Adds a new account."""
     data = request.json
+    # Validate required fields
     if not all(key in data for key in ['email', 'password', 'imap_server', 'port']):
         return jsonify({'error': 'Missing required fields'}), 400
     
@@ -33,7 +34,7 @@ def delete_account(service, account_id):
     accounts = load_payment_accounts(service)
     initial_count = len(accounts)
     
-    accounts = [acc for acc in accounts if acc['id'] != account_id]
+    accounts = [acc for acc in accounts if acc.get('id') != account_id]
     
     if len(accounts) < initial_count:
         save_payment_accounts(service, accounts)
