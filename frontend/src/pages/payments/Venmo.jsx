@@ -2,7 +2,9 @@
 import { apiGet, apiPost, apiDelete } from '../../api';
 
 const PaymentsVenmo = () => {
-    const service = 'venmo';
+    // CORRECTED: Service must be 'venmo'
+    const service = 'venmo'; 
+    
     const [accounts, setAccounts] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [scanMessage, setScanMessage] = useState('');
@@ -66,8 +68,7 @@ const PaymentsVenmo = () => {
 
     useEffect(() => {
         fetchAccounts();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [service]); 
 
     return (
         <div>

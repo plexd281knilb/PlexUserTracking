@@ -2,7 +2,9 @@
 import { apiGet, apiPost, apiDelete } from '../../api';
 
 const PaymentsZelle = () => {
+    // CORRECTED: Service must be 'zelle'
     const service = 'zelle'; 
+    
     const [accounts, setAccounts] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [scanMessage, setScanMessage] = useState('');
@@ -12,7 +14,7 @@ const PaymentsZelle = () => {
         imap_server: 'imap.gmail.com',
         port: 993,
     });
-    // ... rest of the fetchAccounts, handleInputChange, handleAddAccount, handleDeleteAccount, handleTriggerScan functions (identical to Venmo.jsx) ...
+
     const fetchAccounts = async () => {
         setIsLoading(true);
         try {
@@ -66,8 +68,7 @@ const PaymentsZelle = () => {
 
     useEffect(() => {
         fetchAccounts();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [service]); 
 
     return (
         <div>
