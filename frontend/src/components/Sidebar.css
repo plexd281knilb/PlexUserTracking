@@ -1,24 +1,25 @@
-/* Sidebar.css */
+/* frontend/src/components/Sidebar.css - POLISHED VERSION */
 
 .sidebar {
-  position: fixed;
+  position: sticky; /* Make it sticky so it stays on screen */
   top: 0;
-  left: 0;
   width: 220px;
   height: 100vh;
-  background: var(--card); /* Uses theme variable */
+  background: var(--card); 
   padding: 18px 0;
-  border-right: 1px solid var(--border-color); /* Uses theme variable */
+  border-right: 1px solid var(--border-color); 
   box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+  z-index: 10;
   transition: background 0.3s, border-color 0.3s;
 }
 
 .sidebar-header {
-  text-align: center;
-  margin-bottom: 20px;
+  text-align: left;
+  margin-bottom: 25px;
   padding: 0 18px;
-  color: var(--accent); /* Uses accent color for brand look */
-  font-weight: 700;
+  color: var(--accent); 
+  font-size: 1.5rem;
+  font-weight: 800;
 }
 
 .sidebar-nav {
@@ -27,38 +28,44 @@
   margin: 0;
 }
 
+/* Base Link Style */
 .sidebar-nav a {
   display: flex;
   align-items: center;
-  padding: 10px 8px;
+  padding: 10px 12px;
   color: var(--text);
   text-decoration: none;
   margin-bottom: 4px;
   border-radius: 6px;
   transition: background 0.2s, color 0.2s;
   font-size: 0.95rem;
+  font-weight: 500;
 }
 
 .sidebar-nav a:hover {
-  background: rgba(var(--accent), 0.1); /* Light hover effect */
+  /* Use color-mix for a subtle, theme-aware hover */
+  background: color-mix(in srgb, var(--card) 90%, var(--accent));
+  color: var(--text);
 }
 
+/* Active Link Style (The 'light up' effect) */
 .sidebar-nav a.active {
   background: var(--accent);
   color: white !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   font-weight: 600;
 }
 
 .sidebar-nav .icon {
-  margin-right: 10px;
-  font-size: 1.1em;
+  margin-right: 12px;
+  font-size: 1.2em;
 }
 
 .menu-section {
   color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.7rem;
+  font-weight: 700;
   text-transform: uppercase;
-  padding: 15px 8px 5px 8px;
-  margin-top: 10px;
+  letter-spacing: 0.5px;
+  padding: 20px 12px 5px 12px;
 }

@@ -1,15 +1,15 @@
 ﻿import React from "react";
 import { NavLink } from "react-router-dom";
-import "./Sidebar.css"; // Ensure this file exists and contains the base styles
+import "./Sidebar.css";
 
 function Sidebar() {
   return (
     <div className="sidebar">
-      <h2 className="sidebar-header" style={{fontSize: '1.2rem', padding: '0 10px', marginBottom: '20px', color: 'var(--accent)'}}>
+      <h2 className="sidebar-header">
         PLEX TRACKER
       </h2>
 
-      <ul className="sidebar-nav">
+      <div className="sidebar-nav">
 
         <NavLink to="/" end className={({isActive}) => isActive ? 'active' : ''}>
           <span className="icon">🏠</span> Dashboard
@@ -19,7 +19,7 @@ function Sidebar() {
           <span className="icon">👥</span> Users
         </NavLink>
 
-        <li className="menu-section">PAYMENTS</li>
+        <div className="menu-section">PAYMENTS</div>
         
         <NavLink to="/payments/venmo" className={({isActive}) => isActive ? 'active' : ''}>
           <span className="icon">💳</span> Venmo
@@ -33,7 +33,7 @@ function Sidebar() {
           <span className="icon">💳</span> PayPal
         </NavLink>
 
-        <li className="menu-section">MANAGEMENT</li>
+        <div className="menu-section">MANAGEMENT</div>
 
         <NavLink to="/expenses" className={({isActive}) => isActive ? 'active' : ''}>
           <span className="icon">💰</span> Expenses
@@ -43,7 +43,7 @@ function Sidebar() {
           <span className="icon">⚙️</span> Settings
         </NavLink>
 
-        <li className="menu-section">ADMIN</li>
+        <div className="menu-section">ADMIN</div>
 
         <NavLink to="/admin/setup" className={({isActive}) => isActive ? 'active' : ''}>
           <span className="icon">🛠️</span> Setup
@@ -53,7 +53,7 @@ function Sidebar() {
           <span className="icon">🔑</span> Login
         </NavLink>
 
-      </ul>
+      </div>
     </div>
   );
 }
