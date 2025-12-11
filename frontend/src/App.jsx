@@ -4,7 +4,6 @@ import './styles.css';
 
 import Sidebar from "./components/Sidebar";
 
-// Note: Files were likely nested in pages/ and pages/admin/
 import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
 import PaymentsVenmo from "./pages/payments/Venmo"; 
@@ -12,10 +11,11 @@ import PaymentsZelle from "./pages/payments/Zelle";
 import PaymentsPaypal from "./pages/payments/Paypal";
 import Expenses from "./pages/Expenses";
 import Settings from "./pages/Settings";
-import AdminSetup from "./pages/admin/AdminSetup";
-import AdminLogin from "./pages/admin/AdminLogin";
+// Assuming Admin files are in pages/admin/
+import AdminSetup from "./pages/admin/AdminSetup"; 
+import AdminLogin from "./pages/admin/AdminLogin"; 
 
-// --- THEME CONTEXT DEFINITION (REQUIRED TO FIX CRASH) ---
+// --- THEME CONTEXT DEFINITION ---
 export const ThemeContext = createContext();
 
 function App() {
@@ -54,7 +54,7 @@ function App() {
                                 <Route path="/payments/zelle" element={<PaymentsZelle />} />
                                 <Route path="/payments/paypal" element={<PaymentsPaypal />} />
                                 <Route path="/expenses" element={<Expenses />} />
-                                <Route path="/settings/*" element={<Settings />} /> {/* Use /* for nested settings routes */}
+                                <Route path="/settings/*" element={<Settings />} /> 
                                 <Route path="/admin/setup" element={<AdminSetup />} />
                                 <Route path="/admin/login" element={<AdminLogin />} />
                                 <Route path="*" element={<Navigate to="/" replace />} />

@@ -16,7 +16,6 @@ const PaymentsVenmo = () => {
     const fetchAccounts = async () => {
         setIsLoading(true);
         try {
-            // Note: Token is not passed here for simplicity, assuming API is open to admin
             const response = await apiGet(`/payment_emails/${service}`); 
             setAccounts(response.data);
         } catch (error) {
@@ -65,7 +64,6 @@ const PaymentsVenmo = () => {
         }
     };
 
-
     useEffect(() => {
         fetchAccounts();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -76,7 +74,6 @@ const PaymentsVenmo = () => {
             <h1>Venmo Email Scanner Configuration</h1>
             <p className="small">Manage the email accounts used to scan for Venmo payment confirmations and mark users as paid.</p>
 
-            {/* --- Account List --- */}
             <div className="card">
                 <h2>Configured Accounts ({service.toUpperCase()})</h2>
                 {isLoading ? (
@@ -108,13 +105,12 @@ const PaymentsVenmo = () => {
                     </table>
                 )}
                 
-                <div className="flex" style={{ borderTop: '1px solid var(--muted)', paddingTop: '12px', justifyContent: 'space-between' }}>
+                <div className="flex" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', justifyContent: 'space-between' }}>
                     <p className="small">{scanMessage || 'Ready to scan.'}</p>
                     <button className="button" onClick={handleTriggerScan}>Trigger Manual Scan</button>
                 </div>
             </div>
 
-            {/* --- Add New Account Form --- */}
             <div className="card">
                 <h2>Add New Scanner Account</h2>
                 <form onSubmit={handleAddAccount} style={{ display: 'grid', gap: '15px', gridTemplateColumns: '1fr 1fr' }}>
