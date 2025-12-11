@@ -37,5 +37,5 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          # Replace 'your-username' below with your actual Docker Hub username
-          tags: ${{ secrets.plexd281knilb }}/plexusertracking:latest
+          # FIXED LINE BELOW:
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/plexusertracking:latest
