@@ -30,7 +30,9 @@ const PaymentsPaypal = () => {
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        setNewAccount(prev => ({ ...prev, [name]: value }));
+        // Ensure port is treated as a number
+        const val = name === 'port' ? parseInt(value) || '' : value; 
+        setNewAccount(prev => ({ ...prev, [name]: val }));
     };
 
     const handleAddAccount = async (e) => {
@@ -66,7 +68,6 @@ const PaymentsPaypal = () => {
         }
     };
 
-    // FIX: Clean dependency array
     useEffect(() => {
         fetchAccounts();
     }, [service]); 
@@ -97,6 +98,7 @@ const PaymentsPaypal = () => {
                                     <td>{account.email}</td>
                                     <td>{account.imap_server}</td>
                                     <td>{account.last_scanned || 'Never'}</td>
+                                    {/* FIX: Corrected missing closing span and brace */}
                                     <td>{account.enabled ? <span style={{color: 'var(--accent)'}}>Yes</span> : <span style={{color: 'red'}}>No</span>}</td>
                                     <td>
                                         <button className="button" style={{ backgroundColor: 'red', margin: '0' }} onClick={() => handleDeleteAccount(account.id)}>Delete</button>
