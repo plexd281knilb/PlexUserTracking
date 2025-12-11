@@ -1,5 +1,4 @@
 ﻿import React from 'react';
-// Assuming Users component calls backend API to fetch user list
 
 const Users = () => {
     // Placeholder Data
@@ -12,13 +11,13 @@ const Users = () => {
     return (
         <div>
             <h1>User Management</h1>
-            <div className="content-card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                    <input type="text" placeholder="Search users..." />
-                    <button className="btn-primary">Add User</button>
+            <div className="card">
+                <div className="flex" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                    <input className="input" type="text" placeholder="Search users..." />
+                    <button className="button">Add User</button>
                 </div>
                 
-                <table>
+                <table className="table">
                     <thead>
                         <tr>
                             <th>Name</th>
@@ -34,10 +33,13 @@ const Users = () => {
                             <tr key={user.id}>
                                 <td>{user.name}</td>
                                 <td>{user.email}</td>
-                                <td><span style={{color: user.status === 'Active' ? 'green' : 'red'}}>{user.status}</span></td>
+                                <td><span style={{color: user.status === 'Active' ? 'var(--accent)' : 'red'}}>{user.status}</span></td>
                                 <td style={{color: user.due > 0 ? 'red' : 'inherit'}}>${user.due.toFixed(2)}</td>
                                 <td>{user.last_paid}</td>
-                                <td><button className="btn-primary" style={{marginRight: '5px'}}>Edit</button><button className="btn-primary" style={{backgroundColor: 'red'}}>Delete</button></td>
+                                <td>
+                                    <button className="button" style={{marginRight: '5px', padding: '6px 8px'}}>Edit</button>
+                                    <button className="button" style={{backgroundColor: 'red', padding: '6px 8px'}}>Delete</button>
+                                </td>
                             </tr>
                         ))}
                     </tbody>

@@ -22,7 +22,11 @@ function App() {
     // 1. Theme State Logic: Initialize dark mode state, reading from local storage
     const [isDarkMode, setIsDarkMode] = useState(() => {
         const savedMode = localStorage.getItem('themeMode');
-        return savedMode === 'dark'; 
+        // If a saved mode exists, use it. Otherwise, default to TRUE (dark).
+        if (savedMode !== null) {
+            return savedMode === 'dark';
+        }
+        return true; // Default to Dark Mode
     });
     
     // 2. Effect to apply the theme attribute and persist state
