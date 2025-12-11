@@ -45,6 +45,7 @@ function App() {
                             <Route path="/users" element={<Users />} />
                             <Route path="/expenses" element={<Expenses />} />
                             <Route path="/settings/*" element={<Settings />} /> 
+                            <Route path="/payments/*" element={<Payments />} />
                             <Route path="/admin-login" element={<AdminLogin />} />
                             <Route path="/admin-setup" element={<AdminSetup />} />
                             <Route path="*" element={<Navigate to="/" />} />

@@ -1,77 +1,30 @@
-/* Define color variables for light mode (default) */
-:root {
-  /* Primary Colors */
-  --primary-color: #007bff;
-  --primary-hover-color: #0056b3;
+/* --- Tab Navigation Styles --- */
 
-  /* Backgrounds */
-  --background-color: #f8f9fa; /* Light grey/white for body */
-  --secondary-bg-color: #ffffff; /* White for cards/containers */
-  --sidebar-bg-color: #343a40; /* Keeping sidebar dark for contrast */
-
-  /* Text */
-  --text-color: #212529; /* Dark text */
-  --text-muted-color: #6c757d; 
-  --sidebar-text-color: #ffffff;
-  
-  /* Borders/Shadows */
-  --border-color: #dee2e6;
-  --box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-}
-
-/* Dark Mode Overrides (Applied when body has class="dark-mode") */
-.dark-mode {
-  /* Backgrounds */
-  --background-color: #121212; /* Very dark grey/black */
-  --secondary-bg-color: #1e1e1e; /* Slightly lighter dark for cards/containers */
-  --sidebar-bg-color: #343a40; /* Keeps sidebar color consistent */
-  
-  /* Text */
-  --text-color: #e0e0e0; /* Light text */
-  --text-muted-color: #a0a0a0; 
-  --border-color: #363636;
-  --box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.3);
-}
-
-/* Global Styles (Updated to use variables) */
-body {
-  background-color: var(--background-color);
-  color: var(--text-color);
-  margin: 0;
-  transition: background-color 0.3s, color 0.3s;
-}
-
-/* Common container/card style for adaptive background/borders */
-.content-card {
-  background-color: var(--secondary-bg-color);
-  border: 1px solid var(--border-color);
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  box-shadow: var(--box-shadow);
-  margin-bottom: 1.5rem;
-}
-
-/* Standard button styles */
-.btn-primary {
-  background-color: var(--primary-color);
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 0.25rem;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.btn-primary:hover {
-  background-color: var(--primary-hover-color);
-}
-/* Ensure main content area expands correctly */
-#app-container {
+.tab-navigation {
   display: flex;
-  min-height: 100vh;
+  justify-content: flex-start;
+  border-bottom: 2px solid var(--border-color);
+  box-shadow: none; /* Remove shadow to make it feel more like a header */
+  background-color: var(--secondary-bg-color);
+  padding: 0 0 0 0 !important; /* Override content-card padding for clean look */
 }
-#main-content {
-  flex-grow: 1;
-  margin-left: 250px; /* Offset for sidebar */
-  padding: 20px;
+
+.tab-link {
+  text-decoration: none;
+  color: var(--text-muted-color);
+  padding: 10px 15px;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s ease-in-out;
+  font-weight: 500;
+}
+
+.tab-link:hover {
+  color: var(--text-color);
+  border-bottom: 3px solid var(--border-color);
+}
+
+.tab-link.active {
+  color: var(--primary-color);
+  border-bottom: 3px solid var(--primary-color);
+  font-weight: bold;
 }
