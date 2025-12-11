@@ -2,13 +2,15 @@
 FROM node:20-alpine as frontend-build
 WORKDIR /app/frontend
 
-# Copy frontend dependency files
+# Copy frontend dependency files (package.json must be copied FIRST)
 COPY frontend/package.json frontend/package-lock.json ./
+
 # Install dependencies
 RUN npm install
 
-# Copy the rest of the frontend source code
+# Copy all other frontend source code (now that dependencies are installed)
 COPY frontend/ ./
+
 # Build the React application
 RUN npm run build
 
@@ -18,6 +20,8 @@ WORKDIR /app
 
 # Copy backend requirements and install them
 COPY backend/requirements.txt .
+# Ensure you install the IMAP library dependency if you use a non-standard one
+# If you are using standard libraries (imaplib), the below is sufficient.
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the backend source code
