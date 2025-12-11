@@ -1,3 +1,3 @@
 // Base URL for backend API
-const backendPort = 5052; // updated port
-export const API_BASE_URL = `http://localhost:${backendPort}/api`;
+// Since backend and frontend are on the same origin, we can just use the path.
+export const API_BASE_URL = `/api`;
