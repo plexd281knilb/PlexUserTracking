@@ -1,22 +1,25 @@
 from flask import Flask, send_from_directory
 import os
 
-# Import routes - ensure your __init__.py in routes sets these up correctly
-# If you are using blueprints, import and register them here.
-# Example: from routes import users_bp, settings_bp... 
+# Import Blueprints from the route files
+from routes.users import users_bp
+from routes.settings import settings_bp
+from routes.payments import payments_bp
+from routes.expenses import expenses_bp
+from routes.dashboard import dashboard_bp
+from routes.admin import admin_bp
 
 def create_app():
     # Initialize Flask pointing to the folder where we copied the React build
     app = Flask(__name__, static_folder='static_build', static_url_path='/')
 
-    # --- REGISTER BLUEPRINTS HERE ---
-    # You need to ensure your routes/__init__.py exposes your blueprints
-    # or import them directly from the files.
-    # from routes.users import users_bp
-    # app.register_blueprint(users_bp, url_prefix='/api/users')
-    
-    # Placeholder for direct route imports if not using Blueprints:
-    # (Existing logic from your original app.py should go here)
+    # --- REGISTER BLUEPRINTS ---
+    app.register_blueprint(users_bp)
+    app.register_blueprint(settings_bp)
+    app.register_blueprint(payments_bp)
+    app.register_blueprint(expenses_bp)
+    app.register_blueprint(dashboard_bp)
+    app.register_blueprint(admin_bp)
 
     # Serve the React Application
     @app.route('/', defaults={'path': ''})
