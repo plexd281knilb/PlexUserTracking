@@ -1,15 +1,27 @@
-﻿import React, { useState, useEffect } from "react";
-import { apiGet, apiPost } from "../../api";
-export default function Tautulli(){
-  const [cfg, setCfg] = useState({url:"",api_key:""});
-  useEffect(()=>{ apiGet("/api/settings/tautulli").then(r=>setCfg(r)).catch(()=>{}) },[]);
-  async function save(){ await apiPost("/api/settings/tautulli", cfg, localStorage.getItem("admin_token")); alert("Saved"); }
-  return (
-    <div className="card">
-      <h3>Tautulli Settings</h3>
-      <input className="input" placeholder="Tautulli URL" value={cfg.url} onChange={e=>setCfg({...cfg,url:e.target.value})} /><br/>
-      <input className="input" placeholder="API Key" value={cfg.api_key} onChange={e=>setCfg({...cfg,api_key:e.target.value})} /><br/>
-      <button className="button" onClick={save}>Save</button>
-    </div>
-  );
-}
+﻿import React from 'react';
+
+const Tautulli = () => {
+    return (
+        <div className="settings-page">
+            <h2>Tautulli Integration</h2>
+            
+            <div className="content-card">
+                <p>Connect Plex User Tracking to your Tautulli instance to sync user activity, last seen times, and media usage statistics.</p>
+                
+                <div style={{ display: 'grid', gap: '15px', gridTemplateColumns: '1fr', maxWidth: '500px' }}>
+                    <label>Tautulli API Key</label>
+                    <input type="text" placeholder="Enter Tautulli API Key..." />
+                    
+                    <label>Tautulli Base URL</label>
+                    <input type="text" placeholder="e.g., http://192.168.1.10:8181" />
+                    
+                    <div style={{ textAlign: 'right', marginTop: '10px' }}>
+                        <button className="btn-primary">Test Connection & Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default Tautulli;

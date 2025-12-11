@@ -1,80 +1,81 @@
-import imaplib, email
-from models import Session, EmailAccount, Payment
-from payment_parser import parse_payment
+import imaplib
+import email
 from datetime import datetime
-from email.header import decode_header
+import re
+from .database import load_payment_accounts, save_payment_accounts, load_users, save_users
+from .payment_parser import parse_payment_email
 
-def _dec(v):
-    if not v:
-        return ""
-    decoded, enc = decode_header(v)[0]
-    if isinstance(decoded, bytes):
-        return decoded.decode(enc or 'utf-8', errors='ignore')
-    return decoded
+# NOTE: This uses imaplib, which is typically standard in Python. 
+# Make sure to configure your email accounts to allow "less secure apps" or use App Passwords.
 
-def scan_once():
-    session = Session()
-    accounts = session.query(EmailAccount).all()
-    appended = 0
-    for a in accounts:
+def connect_to_imap(account):
+    """Establishes an IMAP connection."""
+    try:
+        mail = imaplib.IMAP4_SSL(account['imap_server'], account['port'])
+        mail.login(account['email'], account['password'])
+        return mail
+    except Exception as e:
+        print(f"IMAP Connection Error for {account['email']}: {e}")
+        return None
+
+def scan_for_payments(service):
+    """Scans all enabled accounts for a service and updates user payments."""
+    accounts = load_payment_accounts(service)
+    users = load_users()
+    payment_count = 0
+
+    for account in accounts:
+        if not account.get('enabled'):
+            continue
+        
+        mail = connect_to_imap(account)
+        if not mail:
+            continue
+
         try:
-            imap = imaplib.IMAP4_SSL(a.imap_server, a.imap_port, timeout=30)
-            imap.login(a.address, a.password)
-            imap.select(a.folder)
-            crit = f'(UNSEEN {a.search_term})' if a.search_term else 'UNSEEN'
-            typ, data = imap.search(None, crit)
-            if typ != 'OK' or not data or not data[0]:
-                try:
-                    imap.close(); imap.logout()
-                except:
-                    pass
-                continue
-            for num in data[0].split():
-                typ, msg_data = imap.fetch(num, '(RFC822)')
-                if typ != 'OK':
-                    continue
-                msg = email.message_from_bytes(msg_data[0][1])
-                subject = _dec(msg.get('Subject'))
-                frm = _dec(msg.get('From'))
-                date = _dec(msg.get('Date'))
-                body = ""
-                if msg.is_multipart():
-                    for part in msg.walk():
-                        ctype = part.get_content_type()
-                        disp = str(part.get("Content-Disposition"))
-                        if ctype == "text/plain" and "attachment" not in disp:
-                            payload = part.get_payload(decode=True)
-                            if payload:
-                                body += payload.decode('utf-8', errors='ignore')
-                else:
-                    payload = msg.get_payload(decode=True)
-                    if payload:
-                        body = payload.decode('utf-8', errors='ignore')
-                amount, payer = parse_payment(body, a.name or a.search_term or a.address)
-                payment = Payment(
-                    service=a.name or a.address,
-                    amount=float(amount) if amount else None,
-                    payer=payer,
-                    subject=subject,
-                    sender=frm,
-                    date=date,
-                    body=body
-                )
-                session.add(payment)
-                appended += 1
-                # mark seen
-                try:
-                    imap.store(num, '+FLAGS', '\\Seen')
-                except:
-                    pass
-            try:
-                imap.close(); imap.logout()
-            except:
-                pass
-            a.last_checked = datetime.utcnow()
-            session.commit()
+            mail.select('inbox')
+            
+            # Search for emails since the last scan date, or a default period
+            since_date = datetime.strptime(account['last_scanned'], '%Y-%m-%d %H:%M:%S') if account.get('last_scanned') else datetime.now()
+            search_date = since_date.strftime('%d-%b-%Y')
+            
+            # Simplified search for payment emails (adapt based on service)
+            # You would need specific senders for Venmo/Zelle/Paypal
+            # For simplicity here, we'll search recent messages.
+            status, email_ids = mail.search(None, 'ALL') 
+            
+            if status == 'OK':
+                for e_id in email_ids[0].split():
+                    status, msg_data = mail.fetch(e_id, '(RFC822)')
+                    if status != 'OK':
+                        continue
+                        
+                    msg = email.message_from_bytes(msg_data[0][1])
+                    
+                    # This function is assumed to be defined externally and extracts payment info
+                    payment_info = parse_payment_email(service, msg)
+                    
+                    if payment_info and payment_info['status'] == 'Paid':
+                        # Find user by email or identifier
+                        user = next((u for u in users if u['email'].lower() == payment_info['recipient_email'].lower()), None)
+                        
+                        if user:
+                            # Mark user as paid for the current cycle
+                            user['last_paid'] = datetime.now().strftime('%Y-%m-%d')
+                            user['status'] = 'Active'
+                            payment_count += 1
+                        
+                        # Optionally mark the email as "Read" or move it to a "Processed" folder
+            
+            # Update last scanned time
+            account['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
         except Exception as e:
-            session.rollback()
-            print("scan account error", e)
-    session.close()
-    return appended
+            print(f"Error scanning email account {account['email']}: {e}")
+        finally:
+            mail.close()
+            mail.logout()
+
+    save_payment_accounts(service, accounts)
+    save_users(users)
+    return payment_count

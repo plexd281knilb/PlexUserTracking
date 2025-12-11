@@ -1,30 +1,44 @@
-/* --- Tab Navigation Styles --- */
+/* --- Input & Table Styles (New/Updated for Readability) --- */
 
-.tab-navigation {
-  display: flex;
-  justify-content: flex-start;
-  border-bottom: 2px solid var(--border-color);
-  box-shadow: none; /* Remove shadow to make it feel more like a header */
+input[type="text"], input[type="password"], textarea, select {
   background-color: var(--secondary-bg-color);
-  padding: 0 0 0 0 !important; /* Override content-card padding for clean look */
-}
-
-.tab-link {
-  text-decoration: none;
-  color: var(--text-muted-color);
-  padding: 10px 15px;
-  border-bottom: 3px solid transparent;
-  transition: all 0.2s ease-in-out;
-  font-weight: 500;
-}
-
-.tab-link:hover {
   color: var(--text-color);
-  border-bottom: 3px solid var(--border-color);
+  border: 1px solid var(--border-color);
+  padding: 8px 10px;
+  border-radius: 4px;
+  transition: border-color 0.2s;
 }
 
-.tab-link.active {
-  color: var(--primary-color);
-  border-bottom: 3px solid var(--primary-color);
+input[type="text"]:focus, input[type="password"]:focus, textarea:focus, select:focus {
+  border-color: var(--primary-color);
+  outline: none;
+}
+
+/* Base table styles */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+}
+
+th, td {
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-color);
+}
+
+thead th {
   font-weight: bold;
+  color: var(--text-color);
+  background-color: rgba(var(--primary-color), 0.05); /* Very light highlight for header */
+}
+
+/* Ensure headings/text use primary color on dark mode as needed for contrast */
+h1, h2, h3, h4 {
+  color: var(--text-color);
+}
+
+.text-muted-color {
+  color: var(--text-muted-color);
 }

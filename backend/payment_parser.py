@@ -1,33 +1,30 @@
+import email
 import re
 
-def _first_group(regex, text):
-    m = re.search(regex, text, re.IGNORECASE)
-    return m.group(1).strip() if m else None
-
-def parse_payment(body, service_type):
+def parse_payment_email(service, msg):
     """
-    Return (amount_str_or_None, payer_str_or_None)
+    Parses an email message based on the payment service and extracts key info.
+    
+    This is a stub. Real implementation requires analyzing email senders and body patterns.
     """
-    if not body:
-        return None, None
+    sender = msg.get('From', '').lower()
+    subject = msg.get('Subject', '')
+    
+    # Simple placeholder logic:
+    if service == 'venmo' and 'venmo' in sender and 'paid you' in subject:
+        return {
+            'status': 'Paid',
+            'amount': 25.00, # Placeholder
+            'recipient_email': 'user@example.com' # Must extract the actual Plex user's email/identifier
+        }
+    
+    if service == 'zelle' and 'zelle' in sender and 'money received' in subject:
+        return {
+            'status': 'Paid',
+            'amount': 25.00,
+            'recipient_email': 'user@example.com' 
+        }
 
-    # Generic amount search
-    amount = _first_group(r"\$([0-9]+(?:\.[0-9]{2})?)", body)
+    # ... and so on for PayPal
 
-    payer = None
-    s = (service_type or "").lower()
-    if s == "paypal":
-        payer = _first_group(r"from\s+([A-Z][\w .'\-@]+)", body) or _first_group(r"Paid by\s+([A-Z][\w .'\-@]+)", body)
-    elif s == "venmo":
-        payer = _first_group(r"([A-Z][\w .'\-]+)\s+paid you", body) or _first_group(r"from\s+([A-Z][\w .'\-]+)", body)
-    elif s.startswith("zelle"):
-        payer = _first_group(r"from\s+([A-Z][\w .'\-]+)", body) or _first_group(r"([A-Z][\w .'\-]+)\s+sent you", body)
-
-    # Memo / Note might contain username
-    memo = _first_group(r"(?:Memo|Note)[:\-]\s*([A-Za-z0-9_ @\.\-]{2,80})", body)
-    if memo:
-        # If memo looks like a username or short token, prefer it
-        if not payer or len(memo) < len(payer):
-            payer = memo
-
-    return amount, payer
+    return None
