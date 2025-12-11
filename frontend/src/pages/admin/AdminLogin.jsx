@@ -1,24 +1,65 @@
-﻿import React, { useState } from "react";
-import { apiPost } from "../../api";
-import { useNavigate } from "react-router-dom";
-export default function AdminLogin(){
-  const [form,setForm]=useState({username:"",password:""});
-  const nav = useNavigate();
-  async function login(){
-    const r = await apiPost("/api/admin/login", form);
-    if (r.token) {
-      localStorage.setItem("admin_token", r.token);
-      nav("/dashboard");
-    } else {
-      alert("Login failed");
-    }
-  }
-  return (
-    <div className="card">
-      <h3>Admin Login</h3>
-      <input className="input" placeholder="username" value={form.username} onChange={e=>setForm({...form,username:e.target.value})} />
-      <input className="input" type="password" placeholder="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} />
-      <button className="button" onClick={login}>Login</button>
-    </div>
-  );
-}
+﻿import React, { useState } from 'react';
+import { apiPost } from '../../api';
+
+const AdminLogin = () => {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [message, setMessage] = useState('');
+
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        setMessage('Logging in...');
+        try {
+            const response = await apiPost('/admin/login', { username, password });
+            if (response.token) {
+                localStorage.setItem('admin_token', response.token);
+                setMessage('Login successful! Redirecting...');
+                // Redirect logic would go here
+            } else {
+                setMessage('Login failed. Invalid credentials.');
+            }
+        } catch (error) {
+            setMessage('An error occurred during login.');
+            console.error('Login error:', error);
+        }
+    };
+
+    return (
+        <div style={{ maxWidth: '400px', margin: '50px auto' }}>
+            <h1>Admin Login</h1>
+            
+            <div className="card">
+                <form onSubmit={handleLogin} style={{ display: 'grid', gap: '15px' }}>
+                    
+                    <label className="small">Username</label>
+                    <input 
+                        className="input" 
+                        type="text" 
+                        value={username} 
+                        onChange={(e) => setUsername(e.target.value)} 
+                        placeholder="Admin Username" 
+                        required 
+                    />
+
+                    <label className="small">Password</label>
+                    <input 
+                        className="input" 
+                        type="password" 
+                        value={password} 
+                        onChange={(e) => setPassword(e.target.value)} 
+                        placeholder="Password" 
+                        required 
+                    />
+                    
+                    <button type="submit" className="button" style={{ marginTop: '10px' }}>
+                        Log In
+                    </button>
+                    
+                    {message && <p className="small" style={{ textAlign: 'center', color: message.includes('successful') ? 'var(--accent)' : 'red' }}>{message}</p>}
+                </form>
+            </div>
+        </div>
+    );
+};
+
+export default AdminLogin;
