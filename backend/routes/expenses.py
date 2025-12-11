@@ -7,7 +7,8 @@ expenses_bp = Blueprint('expenses', __name__, url_prefix='/api/expenses')
 @expenses_bp.route('', methods=['GET'])
 def get_expenses():
     # Placeholder: fetch data
-    return jsonify([])
+    expenses = load_expenses()
+    return jsonify(expenses)
 
 @expenses_bp.route('', methods=['POST'])
 def add_expense():

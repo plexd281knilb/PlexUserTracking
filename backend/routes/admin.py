@@ -7,7 +7,8 @@ admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
 @admin_bp.route('/setup-required', methods=['GET'])
 def setup_required():
     # Placeholder: check config
-    return jsonify({'setup_required': True})
+    config = load_admin_config()
+    return jsonify({'setup_required': config['setup_required']})
 
 @admin_bp.route('/setup', methods=['POST'])
 def setup_admin():
