@@ -3,7 +3,6 @@ name: Build and Push Docker Image
 on:
   push:
     branches: [ "main", "master" ]
-    # Triggers the build only when relevant files change
     paths:
       - 'backend/**'
       - 'frontend/**'
@@ -37,5 +36,5 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          # FIXED LINE BELOW:
+          # Using the lowercase naming convention
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/plexusertracking:latest
