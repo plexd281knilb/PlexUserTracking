@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from "react";
-import { apiGet, apiPost } from "api";
+import { apiGet, apiPost } from "api"; // Clean Import
 
 export default function Notifications(){
   const [cfg,setCfg]=useState({enabled:false, smtp_server:"", smtp_port: 587, from_email:"", app_password: ""});
@@ -18,13 +18,12 @@ export default function Notifications(){
           <label>Enable Reminders</label>
           <input type="checkbox" checked={cfg.enabled} onChange={e=>setCfg({...cfg,enabled:e.target.checked})} />
       </div>
-
       <div style={{display: 'grid', gap: '15px'}}>
-        <input className="input" placeholder="SMTP Server (e.g. smtp.gmail.com)" value={cfg.smtp_server || ''} onChange={e=>setCfg({...cfg,smtp_server:e.target.value})} />
+        <input className="input" placeholder="SMTP Server" value={cfg.smtp_server || ''} onChange={e=>setCfg({...cfg,smtp_server:e.target.value})} />
         <input className="input" type="number" placeholder="Port (587)" value={cfg.smtp_port} onChange={e=>setCfg({...cfg,smtp_port:parseInt(e.target.value)})} />
-        <input className="input" placeholder="From Email Address" value={cfg.from_email || ''} onChange={e=>setCfg({...cfg,from_email:e.target.value})} />
+        <input className="input" placeholder="From Email" value={cfg.from_email || ''} onChange={e=>setCfg({...cfg,from_email:e.target.value})} />
         <input className="input" type="password" placeholder="App Password" value={cfg.app_password || ''} onChange={e=>setCfg({...cfg,app_password:e.target.value})} />
-        <button className="button" onClick={save}>Save SMTP Settings</button>
+        <button className="button" onClick={save}>Save Settings</button>
       </div>
     </div>
   );
