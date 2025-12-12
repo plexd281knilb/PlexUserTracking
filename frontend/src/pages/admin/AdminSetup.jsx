@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { apiGet, apiPost } from '../../api';
+import { apiGet, apiPost } from '../api'; // FIXED IMPORT: was ../../api
 
 const AdminSetup = () => {
     const [isSetupRequired, setIsSetupRequired] = useState(false);

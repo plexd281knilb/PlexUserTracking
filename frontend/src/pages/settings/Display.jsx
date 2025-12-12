@@ -1,5 +1,6 @@
 ﻿import React, { useContext } from 'react';
 import { ThemeContext } from '../../App'; 
+import { apiGet, apiPost } from '../api'; // FIXED IMPORT: was ../../api
 
 const Display = () => {
     const { isDarkMode, setIsDarkMode } = useContext(ThemeContext);
@@ -17,7 +18,6 @@ const Display = () => {
                     <label style={{ fontWeight: 'bold' }}>Dark Mode</label>
                     <p className="small" style={{ margin: 0 }}>Toggle the application theme.</p>
                 </div>
-                {/* Theme Toggle Button */}
                 <button 
                     className="button" 
                     onClick={handleToggle}
