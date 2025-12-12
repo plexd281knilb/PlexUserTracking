@@ -1,56 +1,46 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { apiGet, apiPost, apiDelete } from 'api'; // Clean Absolute Import
+import { apiGet, apiPost, apiDelete } from 'api';
 
 const PaymentsVenmo = () => {
     const service = 'venmo';
     const [accounts, setAccounts] = useState([]);
-    const [newAccount, setNewAccount] = useState({ email: '', password: '', imap_server: 'imap.gmail.com', port: 993 });
+    const [newAcc, setNewAcc] = useState({ email: '', password: '', imap_server: 'imap.gmail.com', port: 993 });
 
-    const fetchAccounts = async () => {
-        try {
-            const response = await apiGet(`/payment_emails/${service}`); 
-            setAccounts(response);
-        } catch (e) { setAccounts([]); }
-    };
+    const fetch = async () => { try { const r = await apiGet(`/payment_emails/${service}`); setAccounts(r); } catch (e) { setAccounts([]); } };
+    useEffect(() => { fetch(); }, []);
 
-    const handleAdd = async (e) => {
+    const add = async (e) => {
         e.preventDefault();
-        await apiPost(`/payment_emails/${service}`, newAccount, localStorage.getItem('admin_token'));
-        setNewAccount({ email: '', password: '', imap_server: 'imap.gmail.com', port: 993 });
-        fetchAccounts();
+        await apiPost(`/payment_emails/${service}`, newAcc, localStorage.getItem('admin_token'));
+        setNewAcc({ email: '', password: '', imap_server: 'imap.gmail.com', port: 993 });
+        fetch();
     };
-
-    useEffect(() => { fetchAccounts(); }, []);
 
     return (
         <div>
-            <h1>Venmo Scanners</h1>
+            <h1>Venmo Email Scanners</h1>
             <div className="card">
                 <table className="table">
-                    <thead>
-                        <tr><th>Email</th><th>Status</th><th>Actions</th></tr>
-                    </thead>
+                    <thead><tr><th>Email</th><th>Actions</th></tr></thead>
                     <tbody>
                         {accounts.map(acc => (
                             <tr key={acc.id}>
                                 <td>{acc.email}</td>
-                                <td>{acc.enabled ? 'Enabled' : 'Disabled'}</td>
-                                <td><button className="button" style={{backgroundColor:'red'}} onClick={() => apiDelete(`/payment_emails/${service}/${acc.id}`)}>Delete</button></td>
+                                <td><button className="button" style={{backgroundColor: 'red'}} onClick={async () => { await apiDelete(`/payment_emails/${service}/${acc.id}`); fetch(); }}>Delete</button></td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </div>
             <div className="card">
-                <h3>Add New Scanner</h3>
-                <form onSubmit={handleAdd} className="flex" style={{flexDirection: 'column', alignItems: 'flex-start'}}>
-                    <input className="input" placeholder="Email" value={newAccount.email} onChange={e=>setNewAccount({...newAccount, email: e.target.value})} />
-                    <input className="input" type="password" placeholder="App Password" value={newAccount.password} onChange={e=>setNewAccount({...newAccount, password: e.target.value})} />
-                    <button className="button" type="submit">Save Scanner</button>
+                <h3>Add New {service} Scanner</h3>
+                <form onSubmit={add} style={{display: 'grid', gap: '10px'}}>
+                    <input className="input" placeholder="Email" value={newAcc.email} onChange={e=>setNewAcc({...newAcc, email: e.target.value})} />
+                    <input className="input" type="password" placeholder="App Password" value={newAcc.password} onChange={e=>setNewAcc({...newAcc, password: e.target.value})} />
+                    <button className="button" type="submit">Connect Account</button>
                 </form>
             </div>
         </div>
     );
 };
-
 export default PaymentsVenmo;

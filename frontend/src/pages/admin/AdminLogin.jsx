@@ -1,5 +1,5 @@
 ﻿import React, { useState } from 'react';
-import { apiPost } from '../api'; // FIXED IMPORT
+import { apiPost } from 'api'; 
 
 const AdminLogin = () => {
     const [username, setUsername] = useState('');
@@ -13,49 +13,31 @@ const AdminLogin = () => {
             const response = await apiPost('/admin/login', { username, password });
             if (response.token) {
                 localStorage.setItem('admin_token', response.token);
-                setMessage('Login successful! Redirecting...');
-                // Redirect logic would go here
+                setMessage('Login successful!');
+                window.location.href = "/";
             } else {
-                setMessage('Login failed. Invalid credentials.');
+                setMessage('Invalid credentials.');
             }
         } catch (error) {
-            setMessage('An error occurred during login.');
-            console.error('Login error:', error);
+            setMessage('Server error.');
         }
     };
 
     return (
-        <div style={{ maxWidth: '400px', margin: '50px auto' }}>
-            <h1>Admin Login</h1>
-            
+        <div style={{ maxWidth: '400px', margin: '100px auto' }}>
+            <h1 style={{textAlign: 'center', color: 'var(--accent)'}}>ADMIN LOGIN</h1>
             <div className="card">
-                <form onSubmit={handleLogin} style={{ display: 'grid', gap: '15px' }}>
-                    
-                    <label className="small">Username</label>
-                    <input 
-                        className="input" 
-                        type="text" 
-                        value={username} 
-                        onChange={(e) => setUsername(e.target.value)} 
-                        placeholder="Admin Username" 
-                        required 
-                    />
-
-                    <label className="small">Password</label>
-                    <input 
-                        className="input" 
-                        type="password" 
-                        value={password} 
-                        onChange={(e) => setPassword(e.target.value)} 
-                        placeholder="Password" 
-                        required 
-                    />
-                    
-                    <button type="submit" className="button" style={{ marginTop: '10px' }}>
-                        Log In
-                    </button>
-                    
-                    {message && <p className="small" style={{ textAlign: 'center', color: message.includes('successful') ? 'var(--accent)' : 'red' }}>{message}</p>}
+                <form onSubmit={handleLogin} style={{ display: 'grid', gap: '20px' }}>
+                    <div>
+                        <label className="small">Username</label>
+                        <input className="input" type="text" value={username} onChange={e => setUsername(e.target.value)} required />
+                    </div>
+                    <div>
+                        <label className="small">Password</label>
+                        <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+                    </div>
+                    <button type="submit" className="button">Login to Tracker</button>
+                    {message && <p className="small" style={{textAlign: 'center', color: 'var(--accent)'}}>{message}</p>}
                 </form>
             </div>
         </div>
