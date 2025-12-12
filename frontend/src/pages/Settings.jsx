@@ -3,7 +3,7 @@ import { NavLink, Routes, Route, Navigate } from 'react-router-dom';
 
 // Import all sub-page components
 import Display from './settings/Display';
-import Plex from './settings/Plex';         // NEW
+import Plex from './settings/Plex';
 import Tautulli from './settings/Tautulli';
 import System from './settings/System';
 import Scan from './settings/Scan';
@@ -12,9 +12,12 @@ import Notifications from './settings/Notifications';
 const Settings = () => {
     return (
         <div>
-            <h1 style={{marginBottom: '20px'}}>Application Settings</h1>
+            <h1 style={{ marginBottom: '10px' }}>Application Settings</h1>
+            <p className="small" style={{ marginBottom: '25px' }}>
+                Manage integrations, notifications, and system preferences.
+            </p>
             
-            {/* New Tab Navigation with separate Plex & Tautulli */}
+            {/* Navigation Tabs */}
             <div className="settings-nav">
                 <NavLink to="display">Display</NavLink>
                 <NavLink to="plex">Plex</NavLink>
@@ -24,11 +27,12 @@ const Settings = () => {
                 <NavLink to="system">System</NavLink>
             </div>
 
+            {/* Content Area */}
             <div className="settings-content">
                 <Routes>
                     <Route index element={<Navigate to="display" replace />} />
                     <Route path="display" element={<Display />} />
-                    <Route path="plex" element={<Plex />} />  {/* NEW ROUTE */}
+                    <Route path="plex" element={<Plex />} />
                     <Route path="tautulli" element={<Tautulli />} />
                     <Route path="notifications" element={<Notifications />} />
                     <Route path="scan" element={<Scan />} />

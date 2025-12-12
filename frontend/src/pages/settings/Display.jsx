@@ -1,22 +1,33 @@
 ﻿import React, { useContext } from 'react';
 import { ThemeContext } from '../../App'; 
-import { apiGet, apiPost } from 'api'; // Clean Import
 
 const Display = () => {
     const { isDarkMode, setIsDarkMode } = useContext(ThemeContext);
+
     return (
         <div className="card">
-            <h3>Display Settings</h3>
             <div className="flex" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                    <label style={{ fontWeight: 'bold' }}>Dark Mode</label>
-                    <p className="small" style={{ margin: 0 }}>Toggle application theme.</p>
+                    <h3>Appearance</h3>
+                    <p className="small" style={{ margin: 0, maxWidth: '400px' }}>
+                        Toggle between the dark slate theme (recommended) and the light theme.
+                    </p>
                 </div>
-                <button className="button" onClick={() => setIsDarkMode(prev => !prev)}>
-                    {isDarkMode ? 'Switch to Light' : 'Switch to Dark'}
+                
+                <button 
+                    className="button" 
+                    onClick={() => setIsDarkMode(prev => !prev)}
+                    style={{
+                        backgroundColor: isDarkMode ? 'var(--bg-app)' : 'var(--accent)',
+                        color: isDarkMode ? 'var(--text-main)' : 'white',
+                        border: '1px solid var(--border)'
+                    }}
+                >
+                    {isDarkMode ? '☀️ Switch to Light Mode' : '🌑 Switch to Dark Mode'}
                 </button>
             </div>
         </div>
     );
 };
+
 export default Display;
