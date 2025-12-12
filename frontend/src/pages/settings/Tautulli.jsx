@@ -1,63 +1,30 @@
 ﻿import React, { useState, useEffect } from "react";
-import { apiGet, apiPost } from "../api"; // FIXED IMPORT
-export default function Tautulli(){
-    // Initialize state with all required fields
-    const [cfg,setCfg]=useState({
-        plex_token: "",         
-        tautulli_api_key: "",   
-        tautulli_url: "",       
-    });
+import { apiGet, apiPost } from "api"; // Clean Absolute Import
 
-    useEffect(()=>{ 
-        apiGet("/settings").then(r=>setCfg(r)).catch(()=>{}) 
-    },[]);
+export default function Tautulli(){
+    const [cfg,setCfg]=useState({ plex_token: "", tautulli_api_key: "", tautulli_url: "" });
+
+    useEffect(()=>{ apiGet("/settings").then(r=>setCfg(r)).catch(()=>{}) },[]);
     
-    async function save(){ 
+    const save = async () => { 
         await apiPost("/settings", cfg, localStorage.getItem("admin_token")); 
-        alert("Settings Saved"); 
-    }
+        alert("Integrations Saved"); 
+    };
     
     return (
         <div className="card">
             <h3>Plex & Tautulli Integration</h3>
-            
-            <div style={{maxWidth: '500px', margin: '0 auto'}}>
-                <div style={{borderBottom: '1px solid var(--border-color)', paddingBottom: '20px', marginBottom: '20px'}}>
-                    <h4 style={{marginBottom: '5px'}}>Plex Token (Required for Disabling Users)</h4>
-                    <p className="small">This token is required to interface with Plex to manage shared users.</p>
-                    <input 
-                        className="input" 
-                        type="password" 
-                        placeholder="Enter Plex Token..." 
-                        value={cfg.plex_token || ''} 
-                        onChange={e=>setCfg({...cfg,plex_token:e.target.value})} 
-                    />
-                </div>
-
-                <div>
-                    <h4 style={{marginBottom: '5px'}}>Tautulli Configuration</h4>
-                    <p className="small">Required to automatically import users and track activity.</p>
-                    
-                    <label className="small" style={{marginTop: '10px', display: 'block'}}>Tautulli API Key</label>
-                    <input 
-                        className="input" 
-                        type="text" 
-                        placeholder="Enter Tautulli API Key..." 
-                        value={cfg.tautulli_api_key || ''} 
-                        onChange={e=>setCfg({...cfg,tautulli_api_key:e.target.value})}
-                    />
-                    
-                    <label className="small" style={{marginTop: '15px', display: 'block'}}>Tautulli Base URL</label>
-                    <input 
-                        className="input" 
-                        type="text" 
-                        placeholder="e.g., http://192.168.1.10:8181"
-                        value={cfg.tautulli_url || ''} 
-                        onChange={e=>setCfg({...cfg,tautulli_url:e.target.value})}
-                    />
-                </div>
+            <div style={{maxWidth: '500px'}}>
+                <label className="small">Plex Admin Token (Required to Disable Users)</label>
+                <input className="input" type="password" value={cfg.plex_token || ''} onChange={e=>setCfg({...cfg,plex_token:e.target.value})} />
                 
-                <br/><button className="button" onClick={save} style={{marginTop: '20px'}}>Save All Connection Settings</button>
+                <label className="small" style={{marginTop:'15px', display:'block'}}>Tautulli API Key</label>
+                <input className="input" value={cfg.tautulli_api_key || ''} onChange={e=>setCfg({...cfg,tautulli_api_key:e.target.value})} />
+                
+                <label className="small" style={{marginTop:'15px', display:'block'}}>Tautulli URL</label>
+                <input className="input" placeholder="http://192.168.1.10:8181" value={cfg.tautulli_url || ''} onChange={e=>setCfg({...cfg,tautulli_url:e.target.value})} />
+                
+                <button className="button" onClick={save} style={{marginTop: '20px'}}>Save Connections</button>
             </div>
         </div>
     );

@@ -3,37 +3,28 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import './styles.css';
 
 import Sidebar from "./components/Sidebar";
-
 import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
+import Expenses from "./pages/Expenses";
+import Settings from "./pages/Settings";
 import PaymentsVenmo from "./pages/payments/Venmo"; 
 import PaymentsZelle from "./pages/payments/Zelle";
 import PaymentsPaypal from "./pages/payments/Paypal";
-import Expenses from "./pages/Expenses";
-import Settings from "./pages/Settings";
-// Assuming Admin files are in pages/admin/
 import AdminSetup from "./pages/admin/AdminSetup"; 
 import AdminLogin from "./pages/admin/AdminLogin"; 
 
-// --- THEME CONTEXT DEFINITION ---
 export const ThemeContext = createContext();
 
 function App() {
-    // 1. Theme State Logic: Initialize dark mode state, reading from local storage
     const [isDarkMode, setIsDarkMode] = useState(() => {
         const savedMode = localStorage.getItem('themeMode');
-        // If a saved mode exists, use it. Otherwise, default to TRUE (dark).
-        if (savedMode !== null) {
-            return savedMode === 'dark';
-        }
-        return true; // Default to Dark Mode
+        // DEFAULT TO DARK MODE if nothing is saved
+        return savedMode !== null ? savedMode === 'dark' : true;
     });
     
-    // 2. Effect to apply the theme attribute and persist state
     useEffect(() => {
         const theme = isDarkMode ? 'dark' : 'light';
         localStorage.setItem('themeMode', theme);
-        // Apply data-theme attribute to the body to match your CSS logic
         document.body.setAttribute('data-theme', theme);
     }, [isDarkMode]);
 
@@ -43,7 +34,6 @@ function App() {
     }), [isDarkMode]);
 
     return (
-        // 3. Wrap the app with the ThemeContext Provider
         <ThemeContext.Provider value={themeContextValue}>
             <Router>
                 <div className="app-root"> 
@@ -53,7 +43,6 @@ function App() {
                             <Routes>
                                 <Route path="/" element={<Dashboard />} />
                                 <Route path="/users" element={<Users />} />
-                                {/* Update routes to point to the nested payment pages */}
                                 <Route path="/payments/venmo" element={<PaymentsVenmo />} />
                                 <Route path="/payments/zelle" element={<PaymentsZelle />} />
                                 <Route path="/payments/paypal" element={<PaymentsPaypal />} />
