@@ -1,135 +1,110 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { apiGet, apiPost, apiDelete } from '../../api';
+import { apiGet, apiPost, apiDelete } from 'api';
 
 const PaymentsPaypal = () => {
-    // CORRECTED: Service must be 'paypal'
-    const service = 'paypal'; 
-    
+    const service = 'paypal';
     const [accounts, setAccounts] = useState([]);
-    const [isLoading, setIsLoading] = useState(false);
     const [scanMessage, setScanMessage] = useState('');
-    const [newAccount, setNewAccount] = useState({
-        email: '',
-        password: '',
-        imap_server: 'imap.gmail.com',
-        port: 993,
+    const [newAcc, setNewAcc] = useState({ 
+        email: '', 
+        password: '', 
+        imap_server: 'imap.gmail.com', 
+        port: 993 
     });
 
-    const fetchAccounts = async () => {
-        setIsLoading(true);
-        try {
-            const response = await apiGet(`/payment_emails/${service}`); 
-            setAccounts(response.data);
-        } catch (error) {
-            console.error('Error fetching accounts:', error);
-            setAccounts([]);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        // Ensure port is treated as a number
-        const val = name === 'port' ? parseInt(value) || '' : value; 
-        setNewAccount(prev => ({ ...prev, [name]: val }));
-    };
-
-    const handleAddAccount = async (e) => {
-        e.preventDefault();
-        try {
-            await apiPost(`/payment_emails/${service}`, newAccount, localStorage.getItem('admin_token'));
-            setNewAccount({ email: '', password: '', imap_server: 'imap.gmail.com', port: 993 });
-            fetchAccounts();
-        } catch (error) {
-            console.error('Error adding account:', error);
-            alert('Failed to add account. Check server logs.');
-        }
-    };
-
-    const handleDeleteAccount = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this account?')) return;
-        try {
-            await apiDelete(`/payment_emails/${service}/${id}`, localStorage.getItem('admin_token'));
-            fetchAccounts();
-        } catch (error) {
-            console.error('Error deleting account:', error);
-        }
+    const fetch = async () => { 
+        try { 
+            const r = await apiGet(`/payment_emails/${service}`); 
+            setAccounts(r); 
+        } catch (e) { setAccounts([]); } 
     };
     
-    const handleTriggerScan = async () => {
-        setScanMessage('Scanning in progress...');
-        try {
-            const response = await apiPost(`/payment_emails/scan/${service}`, {}, localStorage.getItem('admin_token'));
-            setScanMessage(response.data.message);
-        } catch (error) {
-            setScanMessage('Scan failed. Check server logs.');
-            console.error('Scan error:', error);
-        }
+    useEffect(() => { fetch(); }, []);
+
+    const add = async (e) => {
+        e.preventDefault();
+        await apiPost(`/payment_emails/${service}`, newAcc, localStorage.getItem('admin_token'));
+        setNewAcc({ email: '', password: '', imap_server: 'imap.gmail.com', port: 993 });
+        fetch();
     };
 
-    useEffect(() => {
-        fetchAccounts();
-    }, [service]); 
+    const triggerScan = async () => {
+        setScanMessage('Scanning...');
+        try {
+            const res = await apiPost(`/payment_emails/scan/${service}`, {}, localStorage.getItem('admin_token'));
+            setScanMessage(res.message);
+        } catch (e) { setScanMessage('Scan failed.'); }
+    };
 
     return (
         <div>
-            <h1>PayPal Email Scanner Configuration</h1>
-            <p className="small">Manage the email accounts used to scan for PayPal payment confirmations and mark users as paid.</p>
+            <h1>PayPal Email Scanners</h1>
+            <p className="small" style={{marginBottom: '20px'}}>
+                Monitor these email accounts for "You've got money" notifications from PayPal.
+            </p>
 
             <div className="card">
-                <h2>Configured Accounts ({service.toUpperCase()})</h2>
-                {isLoading ? (
-                    <p>Loading...</p>
-                ) : (
-                    <table className="table">
-                        <thead>
-                            <tr>
-                                <th>Email Address</th>
-                                <th>IMAP Server</th>
-                                <th>Last Scanned</th>
-                                <th>Enabled</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {accounts.map(account => (
-                                <tr key={account.id}>
-                                    <td>{account.email}</td>
-                                    <td>{account.imap_server}</td>
-                                    <td>{account.last_scanned || 'Never'}</td>
-                                    {/* FIX: Corrected missing closing span and brace */}
-                                    <td>{account.enabled ? <span style={{color: 'var(--accent)'}}>Yes</span> : <span style={{color: 'red'}}>No</span>}</td>
-                                    <td>
-                                        <button className="button" style={{ backgroundColor: 'red', margin: '0' }} onClick={() => handleDeleteAccount(account.id)}>Delete</button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-                
-                <div className="flex" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', justifyContent: 'space-between' }}>
-                    <p className="small">{scanMessage || 'Ready to scan.'}</p>
-                    <button className="button" onClick={handleTriggerScan}>Trigger Manual Scan</button>
+                <div className="flex" style={{justifyContent: 'space-between', marginBottom: '15px'}}>
+                    <h3>Configured Accounts</h3>
+                    <div className="flex">
+                        <span className="small" style={{alignSelf: 'center'}}>{scanMessage}</span>
+                        <button className="button" onClick={triggerScan}>Run Manual Scan</button>
+                    </div>
                 </div>
+                
+                <table className="table">
+                    <thead><tr><th>Email</th><th>Server</th><th>Last Scan</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        {accounts.map(acc => (
+                            <tr key={acc.id}>
+                                <td>{acc.email}</td>
+                                <td>{acc.imap_server}</td>
+                                <td>{acc.last_scanned || 'Never'}</td>
+                                <td>
+                                    <button className="button" style={{backgroundColor: 'var(--danger)', padding: '6px 12px', fontSize: '0.85rem'}} 
+                                        onClick={async () => { 
+                                            if(!window.confirm('Remove this scanner?')) return;
+                                            await apiDelete(`/payment_emails/${service}/${acc.id}`, localStorage.getItem('admin_token')); 
+                                            fetch(); 
+                                        }}>
+                                        Remove
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                        {accounts.length === 0 && <tr><td colSpan="4" style={{textAlign:'center', padding:'20px'}}>No PayPal scanners configured.</td></tr>}
+                    </tbody>
+                </table>
             </div>
 
-            <div className="card">
-                <h2>Add New Scanner Account</h2>
-                <form onSubmit={handleAddAccount} style={{ display: 'grid', gap: '15px', gridTemplateColumns: '1fr 1fr' }}>
-                    <input className="input" type="email" name="email" value={newAccount.email} onChange={handleInputChange} placeholder="Email (must allow IMAP)" required />
-                    <input className="input" type="password" name="password" value={newAccount.password} onChange={handleInputChange} placeholder="Password/App Password" required />
-                    <input className="input" type="text" name="imap_server" value={newAccount.imap_server} onChange={handleInputChange} placeholder="IMAP Server (e.g., imap.gmail.com)" required />
-                    <input className="input" type="number" name="port" value={newAccount.port} onChange={handleInputChange} placeholder="Port (e.g., 993)" required />
-                    
-                    <div style={{ gridColumn: 'span 2', textAlign: 'right' }}>
-                        <button type="submit" className="button">Save Account</button>
+            <div className="card" style={{maxWidth: '600px'}}>
+                <h3>Add New PayPal Scanner</h3>
+                <form onSubmit={add} style={{display: 'grid', gap: '15px'}}>
+                    <div>
+                        <label className="small">Email Address</label>
+                        <input className="input" placeholder="e.g. my.paypal.alerts@gmail.com" value={newAcc.email} onChange={e=>setNewAcc({...newAcc, email: e.target.value})} required />
                     </div>
+                    
+                    <div>
+                        <label className="small">App Password (Required for Gmail/Yahoo)</label>
+                        <input className="input" type="password" placeholder="16-character app password" value={newAcc.password} onChange={e=>setNewAcc({...newAcc, password: e.target.value})} required />
+                    </div>
+
+                    <div className="flex">
+                        <div style={{flex: 2}}>
+                            <label className="small">IMAP Server</label>
+                            <input className="input" value={newAcc.imap_server} onChange={e=>setNewAcc({...newAcc, imap_server: e.target.value})} required />
+                        </div>
+                        <div style={{flex: 1}}>
+                            <label className="small">Port</label>
+                            <input className="input" type="number" value={newAcc.port} onChange={e=>setNewAcc({...newAcc, port: parseInt(e.target.value)})} required />
+                        </div>
+                    </div>
+
+                    <button className="button" type="submit" style={{marginTop: '10px'}}>Connect Account</button>
                 </form>
             </div>
         </div>
     );
 };
-
 export default PaymentsPaypal;

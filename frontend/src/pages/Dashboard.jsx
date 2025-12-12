@@ -1,12 +1,25 @@
-﻿import React from 'react';
+﻿import React, { useState, useEffect } from 'react';
+import { apiGet } from 'api';
 
 const Dashboard = () => {
-    // Placeholder Data - This will eventually pull from backend/routes/dashboard.py
-    const summary = {
-        users: { total: 42, active: 38 },
-        income: { month: 350.00, ytd: 1500.00 },
-        expense: { ytd: 200.00 },
-    };
+    const [summary, setSummary] = useState({
+        total_users: 0,
+        active_users: 0,
+        income_mo: 0,
+        expense_yr: 0,
+        recent_activity: []
+    });
+
+    useEffect(() => {
+        const loadStats = async () => {
+            try {
+                // We will create this endpoint in the next step
+                const data = await apiGet('/dashboard/summary');
+                setSummary(data);
+            } catch (e) { console.error(e); }
+        };
+        loadStats();
+    }, []);
 
     const StatCard = ({ title, value, sub, color }) => (
         <div className="card" style={{flex: 1, textAlign: 'center', borderTop: `4px solid ${color}`}}>
@@ -20,25 +33,30 @@ const Dashboard = () => {
         <div>
             <h1 style={{marginBottom: '20px'}}>Dashboard Overview</h1>
             
-            {/* Top Stats Row */}
-            <div className="flex" style={{marginBottom: '20px', alignItems: 'stretch'}}>
-                <StatCard title="Total Users" value={summary.users.total} sub={`${summary.users.active} Active`} color="var(--accent)" />
-                <StatCard title="Monthly Revenue" value={`$${summary.income.month}`} sub="+12% vs last month" color="#10b981" /> {/* Green */}
-                <StatCard title="YTD Expenses" value={`$${summary.expense.ytd}`} sub="Hosting & Domains" color="#ef4444" /> {/* Red */}
-                <StatCard title="Net Profit" value={`$${summary.income.ytd - summary.expense.ytd}`} sub="Year to Date" color="var(--accent)" />
+            <div className="flex" style={{marginBottom: '20px', alignItems: 'stretch', flexWrap: 'wrap'}}>
+                <StatCard title="Total Users" value={summary.total_users} sub={`${summary.active_users} Active`} color="var(--accent)" />
+                <StatCard title="Est. Monthly Income" value={`$${summary.income_mo}`} sub="Based on active users" color="#10b981" />
+                <StatCard title="YTD Expenses" value={`$${summary.expense_yr}`} sub="Total costs" color="#ef4444" />
+                <StatCard title="Net Run Rate" value={`$${(summary.income_mo * 12) - summary.expense_yr}`} sub="Projected Annual Profit" color="var(--accent)" />
             </div>
 
-            {/* Recent Activity Table */}
             <div className="card">
                 <h3>Recent Activity</h3>
                 <table className="table">
                     <thead>
-                        <tr><th>Date</th><th>User</th><th>Action</th><th>Amount</th><th>Status</th></tr>
+                        <tr><th>Date</th><th>Description</th></tr>
                     </thead>
                     <tbody>
-                        <tr><td>Today</td><td>Alice Smith</td><td>Venmo Payment</td><td style={{color: '#10b981'}}>+$15.00</td><td>Processed</td></tr>
-                        <tr><td>Yesterday</td><td>Bob Jones</td><td>Plex Import</td><td>-</td><td>Completed</td></tr>
-                        <tr><td>Dec 10</td><td>Charlie Day</td><td>PayPal Payment</td><td style={{color: '#10b981'}}>+$10.00</td><td>Processed</td></tr>
+                        {summary.recent_activity.length > 0 ? (
+                            summary.recent_activity.map((act, i) => (
+                                <tr key={i}>
+                                    <td style={{width: '150px'}}>{act.date}</td>
+                                    <td>{act.desc}</td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr><td colSpan="2">No recent activity recorded.</td></tr>
+                        )}
                     </tbody>
                 </table>
             </div>
