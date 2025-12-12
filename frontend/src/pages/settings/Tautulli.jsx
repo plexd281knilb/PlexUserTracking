@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from "react";
-import { apiGet, apiPost } from "../api"; // FIXED IMPORT: was ../../api
+import { apiGet, apiPost } from "../api"; // FIXED IMPORT
 export default function Tautulli(){
     // Initialize state with all required fields
     const [cfg,setCfg]=useState({

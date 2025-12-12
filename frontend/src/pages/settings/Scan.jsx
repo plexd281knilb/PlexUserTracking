@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from "react";
-import { apiGet, apiPost } from "../api"; // FIXED IMPORT: was ../../api
+import { apiGet, apiPost } from "../api"; // FIXED IMPORT
 export default function ScanSettings(){
   const [cfg,setCfg]=useState({scan_interval_min:60});
   

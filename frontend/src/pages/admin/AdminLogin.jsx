@@ -1,5 +1,5 @@
 ﻿import React, { useState } from 'react';
-import { apiPost } from '../api'; // FIXED IMPORT: was ../../api
+import { apiPost } from '../api'; // FIXED IMPORT
 
 const AdminLogin = () => {
     const [username, setUsername] = useState('');

@@ -1,6 +1,6 @@
 ﻿import React, { useContext } from 'react';
 import { ThemeContext } from '../../App'; 
-import { apiGet, apiPost } from '../api'; // FIXED IMPORT: was ../../api
+import { apiGet, apiPost } from '../api'; // FIXED IMPORT
 
 const Display = () => {
     const { isDarkMode, setIsDarkMode } = useContext(ThemeContext);

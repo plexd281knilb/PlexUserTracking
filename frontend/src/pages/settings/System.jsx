@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from "react";
-import { apiGet, apiPost } from "../api"; // FIXED IMPORT: was ../../api
+import { apiGet, apiPost } from "../api"; // FIXED IMPORT
 export default function System(){
   // Using an object that contains all settings keys for safe merging
   const [cfg,setCfg]=useState({web_port:5052, host_url: 'http://localhost:5052'}); 
