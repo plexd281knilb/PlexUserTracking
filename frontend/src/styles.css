@@ -13,15 +13,15 @@
   --box-shadow-light: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
 }
 [data-theme="dark"]{
-  /* Dark Mode */
-  --bg: #1f2937; /* Neutral dark grey */
-  --card: #2d3748; /* Slightly lighter card background for depth */
-  --muted: #a0aec0;
-  --accent: #4299e1; /* Lighter blue for dark contrast */
-  --accent-hover: #3182ce;
+  /* Dark Mode - Deeper, higher contrast */
+  --bg: #121212; /* Very dark background */
+  --card: #1e1e1e; /* Slightly lighter card background */
+  --muted: #a0a0a0;
+  --accent: #55a8e0; /* Slightly brighter blue for dark contrast */
+  --accent-hover: #3e88b8;
   --text: #ffffff;
-  --border-color: #4a5568; /* Dark border for separation */
-  --box-shadow-light: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.25);
+  --border-color: #363636;
+  --box-shadow-light: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.4);
 }
 
 /* --- Base & Typography --- */
@@ -116,7 +116,8 @@ h1, h2, h3 {
 }
 .table th{
     font-weight: 600;
-    background: color-mix(in srgb, var(--card) 90%, var(--accent)); /* Subtle hint of accent color */
+    /* Uses color-mix for subtle background highlight */
+    background: color-mix(in srgb, var(--card) 90%, var(--accent)); 
     color: var(--text);
 }
 .table tr:last-child td {

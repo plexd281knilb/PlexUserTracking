@@ -1,17 +1,23 @@
 ﻿from flask import Blueprint, jsonify, request
-# FIX: Using simple absolute import (and defining the functions we will use)
 from database import load_settings, save_settings 
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/api/settings')
 
 @settings_bp.route('', methods=['GET'])
 def get_settings():
-    # Placeholder: fetch settings
     settings = load_settings()
     return jsonify(settings)
 
 @settings_bp.route('', methods=['PUT'])
 def update_settings():
-    # Placeholder: update settings
-    # You would typically merge request.json into existing settings here
+    data = request.json
+    settings = load_settings()
+    
+    # Merge new data into existing settings safely
+    for key, value in data.items():
+        # Only update keys that exist in the loaded settings schema
+        if key in settings:
+            settings[key] = value
+    
+    save_settings(settings)
     return jsonify({'status': 'ok'})
