@@ -1,7 +1,6 @@
 ﻿import React, { useState, useEffect } from "react";
-import { apiGet, apiPost } from "../../api";
+import { apiGet, apiPost } from "../../api"; // CLEAN IMPORT
 export default function Notifications(){
-  // Added smtp_port and app_password to the state
   const [cfg,setCfg]=useState({enabled:false, smtp_server:"", smtp_port: 587, from_email:"", app_password: ""});
   
   useEffect(()=>{ 

@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from "react";
-import { apiGet, apiPost } from "../../api";
+import { apiGet, apiPost } from "../../api"; // CLEAN IMPORT
 export default function Tautulli(){
     // Initialize state with all required fields
     const [cfg,setCfg]=useState({
@@ -9,7 +9,6 @@ export default function Tautulli(){
     });
 
     useEffect(()=>{ 
-        // Fetches all settings, including new fields
         apiGet("/settings").then(r=>setCfg(r)).catch(()=>{}) 
     },[]);
     
