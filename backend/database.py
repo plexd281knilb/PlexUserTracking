@@ -1,19 +1,33 @@
 import json
 import os
 
+# --- PERSISTENCE SETUP ---
+# We save all files to a 'data' subdirectory.
+# You will map this folder in Unraid to keep your settings safe.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, 'data')
+
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
+
+def get_path(filename):
+    return os.path.join(DATA_DIR, filename)
+
 # --- Generic Load/Save Helpers ---
 def load_data(filename, default_value):
-    if not os.path.exists(filename):
+    filepath = get_path(filename)
+    if not os.path.exists(filepath):
         save_data(filename, default_value)
         return default_value
     try:
-        with open(filename, 'r') as f:
+        with open(filepath, 'r') as f:
             return json.load(f)
     except (json.JSONDecodeError, IOError):
         return default_value
 
 def save_data(filename, data):
-    with open(filename, 'w') as f:
+    filepath = get_path(filename)
+    with open(filepath, 'w') as f:
         json.dump(data, f, indent=4)
 
 # --- Settings ---
