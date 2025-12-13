@@ -5,6 +5,7 @@ from routes.settings import settings_bp
 from routes.dashboard import dashboard_bp
 from routes.payments import payments_bp
 from routes.logs import logs_bp              # <--- NEW IMPORT
+from routes.expenses import expenses_bp
 
 app = Flask(__name__)
 CORS(app)
@@ -15,6 +16,7 @@ app.register_blueprint(settings_bp)
 app.register_blueprint(dashboard_bp)
 app.register_blueprint(payments_bp)
 app.register_blueprint(logs_bp)              # <--- NEW REGISTRATION
+app.register_blueprint(expenses_bp)
 
 @app.route('/')
 def home():
