@@ -6,8 +6,13 @@ const PaymentsPaypal = () => {
     const [accounts, setAccounts] = useState([]);
     const [logs, setLogs] = useState([]); // State for History
     const [scanMessage, setScanMessage] = useState('');
+    
+    // Defaults set to Gmail
     const [newAcc, setNewAcc] = useState({ 
-        email: '', password: '', imap_server: 'imap.gmail.com', port: 993 
+        email: '', 
+        password: '', 
+        imap_server: 'imap.gmail.com', 
+        port: 993 
     });
 
     const fetchData = async () => { 
@@ -17,8 +22,12 @@ const PaymentsPaypal = () => {
             
             // Fetch Payment History
             const allLogs = await apiGet('/payment_logs');
+            // Filter specifically for PayPal service logs
             setLogs(allLogs.filter(l => l.service === 'PayPal'));
-        } catch (e) { console.error(e); } 
+        } catch (e) { 
+            setAccounts([]); 
+            console.error(e);
+        } 
     };
     
     useEffect(() => { fetchData(); }, []);
@@ -118,4 +127,5 @@ const PaymentsPaypal = () => {
         </div>
     );
 };
+
 export default PaymentsPaypal;
