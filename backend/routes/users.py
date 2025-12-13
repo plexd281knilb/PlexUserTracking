@@ -1,6 +1,7 @@
 ﻿from flask import Blueprint, jsonify, request
 from database import load_users, save_users
-from integrations import fetch_plex_users, fetch_tautulli_users
+# UPDATED IMPORTS: Use the new "fetch_all" functions
+from integrations import fetch_all_plex_users, fetch_all_tautulli_users
 
 users_bp = Blueprint('users', __name__, url_prefix='/api/users')
 
@@ -12,8 +13,13 @@ def get_users():
 @users_bp.route('/import/plex', methods=['POST'])
 def import_plex():
     try:
-        count = fetch_plex_users()
-        return jsonify({'status': 'ok', 'users_imported': count, 'message': f'Successfully imported {count} users from Plex.'})
+        # UPDATED CALL: fetch_all_plex_users()
+        count = fetch_all_plex_users()
+        return jsonify({
+            'status': 'ok', 
+            'users_imported': count, 
+            'message': f'Successfully scanned all Plex servers. Imported {count} new users.'
+        })
     except Exception as e:
         print(f"Plex Import Error: {e}")
         return jsonify({'error': str(e)}), 500
@@ -21,8 +27,13 @@ def import_plex():
 @users_bp.route('/import/tautulli', methods=['POST'])
 def import_tautulli():
     try:
-        count = fetch_tautulli_users()
-        return jsonify({'status': 'ok', 'users_imported': count, 'message': f'Successfully imported {count} users from Tautulli.'})
+        # UPDATED CALL: fetch_all_tautulli_users()
+        count = fetch_all_tautulli_users()
+        return jsonify({
+            'status': 'ok', 
+            'users_imported': count, 
+            'message': f'Successfully scanned all Tautulli servers. Imported {count} new users.'
+        })
     except Exception as e:
         print(f"Tautulli Import Error: {e}")
         return jsonify({'error': str(e)}), 500
