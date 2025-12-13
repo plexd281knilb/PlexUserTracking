@@ -1,76 +1,212 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { apiGet, apiPost } from 'api';
+import { apiGet, apiPost, apiPut } from 'api';
 
 const Users = () => {
     const [users, setUsers] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [logs, setLogs] = useState([]);
+    const [loading, setLoading] = useState(true);
+    
+    // Modals State
+    const [editUser, setEditUser] = useState(null);
+    const [matchUser, setMatchUser] = useState(null);
 
-    // Fetch real users from backend on load
-    const fetchUsers = async () => {
-        setIsLoading(true);
+    const fetchData = async () => {
+        setLoading(true);
         try {
-            const data = await apiGet('/users');
-            setUsers(data);
-        } catch (error) {
-            console.error("Failed to load users", error);
-        } finally {
-            setIsLoading(false);
-        }
+            const [uData, lData] = await Promise.all([
+                apiGet('/users'),
+                apiGet('/payment_logs')
+            ]);
+            setUsers(uData);
+            setLogs(lData.filter(l => l.status === 'Unmapped')); // Only show unmapped for matching
+        } catch (e) { console.error(e); } 
+        finally { setLoading(false); }
     };
 
-    useEffect(() => { fetchUsers(); }, []);
+    useEffect(() => { fetchData(); }, []);
+
+    // --- ACTIONS ---
+
+    const handleSaveUser = async (e) => {
+        e.preventDefault();
+        await apiPut(`/users/${editUser.id}`, editUser, localStorage.getItem('admin_token'));
+        setEditUser(null);
+        fetchData();
+    };
+
+    const handleMatch = async (log) => {
+        if(!confirm(`Link payment of ${log.amount} from ${log.sender} to ${matchUser.username}?`)) return;
+        await apiPost(`/users/${matchUser.id}/match_payment`, {
+            date: log.date,
+            raw_text: log.raw_text
+        }, localStorage.getItem('admin_token'));
+        setMatchUser(null);
+        fetchData();
+    };
+
+    const toggleStatus = async (user) => {
+        const newStatus = user.status === 'Active' ? 'Disabled' : 'Active';
+        if(!confirm(`Mark ${user.username} as ${newStatus}?`)) return;
+        await apiPut(`/users/${user.id}`, { ...user, status: newStatus }, localStorage.getItem('admin_token'));
+        fetchData();
+    };
 
     const handleImport = async (source) => {
-        if (!window.confirm(`Import users from ${source}? This may update existing records.`)) return;
+        if (!window.confirm(`Import from ${source}?`)) return;
+        setLoading(true);
         try {
             const res = await apiPost(`/users/import/${source}`, {}, localStorage.getItem('admin_token'));
-            alert(res.message || `Import successful!`);
-            fetchUsers(); // Refresh list after import
-        } catch (e) { alert('Import failed. Check Settings.'); }
+            alert(res.message);
+            fetchData();
+        } catch (e) { alert('Import failed.'); }
+        setLoading(false);
     };
 
     return (
         <div>
-            <h1>User Management</h1>
+            <div className="flex" style={{justifyContent:'space-between', alignItems:'center'}}>
+                <h1>User Management</h1>
+                <div className="flex">
+                    <button className="button" onClick={() => handleImport('plex')}>Import Plex</button>
+                    <button className="button" onClick={() => handleImport('tautulli')}>Import Tautulli</button>
+                </div>
+            </div>
+
             <div className="card">
-                <div className="flex" style={{justifyContent: 'space-between', marginBottom: '20px'}}>
-                    <input className="input" placeholder="Search users..." style={{maxWidth: '300px', marginTop:0}} />
-                    <div className="flex">
-                        <button className="button" onClick={() => handleImport('plex')}>Import Plex</button>
-                        <button className="button" onClick={() => handleImport('tautulli')}>Import Tautulli</button>
+                <table className="table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Full Name</th>
+                            <th>Email</th>
+                            <th>Frequency</th>
+                            <th>Status (Access)</th>
+                            <th>Last Paid</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {users.map(u => (
+                            <tr key={u.id}>
+                                <td style={{fontWeight:'bold'}}>{u.username}</td>
+                                <td>{u.full_name || '-'}</td>
+                                <td className="small">{u.email}</td>
+                                <td>
+                                    <span style={{
+                                        fontSize:'0.75rem', padding:'2px 6px', borderRadius:'4px',
+                                        backgroundColor: u.payment_freq === 'Yearly' ? '#8b5cf6' : '#64748b',
+                                        color: 'white'
+                                    }}>
+                                        {u.payment_freq || 'Monthly'}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span style={{
+                                        color: u.status === 'Active' ? '#10b981' : '#ef4444', 
+                                        fontWeight: 'bold'
+                                    }}>
+                                        {u.status}
+                                    </span>
+                                </td>
+                                <td>{u.last_paid || 'Never'}</td>
+                                <td>
+                                    <div className="flex" style={{gap:'5px'}}>
+                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem'}} 
+                                            onClick={() => setEditUser(u)}>
+                                            Edit
+                                        </button>
+                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: '#f59e0b'}} 
+                                            onClick={() => setMatchUser(u)}>
+                                            Match Pay
+                                        </button>
+                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: u.status==='Active'?'#ef4444':'#10b981'}} 
+                                            onClick={() => toggleStatus(u)}>
+                                            {u.status==='Active' ? 'Disable' : 'Enable'}
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* EDIT USER MODAL */}
+            {editUser && (
+                <div style={modalStyle}>
+                    <div className="card" style={{minWidth: '400px', margin: 'auto'}}>
+                        <h3>Edit User: {editUser.username}</h3>
+                        <form onSubmit={handleSaveUser} style={{display:'grid', gap:'15px'}}>
+                            <div>
+                                <label className="small">Full Name</label>
+                                <input className="input" value={editUser.full_name || ''} 
+                                    onChange={e=>setEditUser({...editUser, full_name: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="small">Email</label>
+                                <input className="input" value={editUser.email || ''} 
+                                    onChange={e=>setEditUser({...editUser, email: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="small">Payment Frequency</label>
+                                <select className="input" value={editUser.payment_freq || 'Monthly'}
+                                    onChange={e=>setEditUser({...editUser, payment_freq: e.target.value})}>
+                                    <option value="Monthly">Monthly</option>
+                                    <option value="Yearly">Yearly</option>
+                                </select>
+                            </div>
+                            <div className="flex" style={{justifyContent:'flex-end'}}>
+                                <button type="button" className="button" style={{backgroundColor:'#64748b', marginRight:'10px'}} onClick={()=>setEditUser(null)}>Cancel</button>
+                                <button type="submit" className="button">Save Changes</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
-                
-                {isLoading ? <p>Loading users...</p> : (
-                    <table className="table">
-                        <thead>
-                            <tr><th>Name</th><th>Email</th><th>Status</th><th>Last Paid</th><th>Actions</th></tr>
-                        </thead>
-                        <tbody>
-                            {users.map(u => (
-                                <tr key={u.id}>
-                                    <td>{u.name}</td>
-                                    <td>{u.email}</td>
-                                    <td>
-                                        <span style={{
-                                            color: u.status === 'Active' ? '#10b981' : '#ef4444', 
-                                            fontWeight: 'bold'
-                                        }}>
-                                            {u.status}
-                                        </span>
-                                    </td>
-                                    <td>{u.last_paid || 'Never'}</td>
-                                    <td>
-                                        <button className="button" style={{padding:'5px 10px', fontSize:'0.8rem', backgroundColor: 'var(--bg-input)'}}>Edit</button>
-                                    </td>
-                                </tr>
-                            ))}
-                            {users.length === 0 && <tr><td colSpan="5" style={{textAlign:'center'}}>No users found. Try importing from Plex.</td></tr>}
-                        </tbody>
-                    </table>
-                )}
-            </div>
+            )}
+
+            {/* MATCH PAYMENT MODAL */}
+            {matchUser && (
+                <div style={modalStyle}>
+                    <div className="card" style={{minWidth: '500px', maxHeight: '80vh', overflowY: 'auto', margin: 'auto'}}>
+                        <h3>Match Payment to {matchUser.username}</h3>
+                        <p className="small">Select a recent unmapped transaction below:</p>
+                        
+                        <table className="table" style={{marginTop:'15px'}}>
+                            <thead><tr><th>Date</th><th>Sender</th><th>Amount</th><th>Action</th></tr></thead>
+                            <tbody>
+                                {logs.map((log, i) => (
+                                    <tr key={i}>
+                                        <td>{log.date}</td>
+                                        <td>{log.sender}</td>
+                                        <td>{log.amount}</td>
+                                        <td>
+                                            <button className="button" style={{padding:'2px 8px', fontSize:'0.7rem'}} 
+                                                onClick={() => handleMatch(log)}>
+                                                Select
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {logs.length === 0 && <tr><td colSpan="4" style={{textAlign:'center'}}>No unmapped payments found.</td></tr>}
+                            </tbody>
+                        </table>
+                        
+                        <div style={{marginTop:'20px', textAlign:'right'}}>
+                            <button className="button" style={{backgroundColor:'#64748b'}} onClick={()=>setMatchUser(null)}>Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
+
+// Simple inline modal style
+const modalStyle = {
+    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 1000
+};
+
 export default Users;
