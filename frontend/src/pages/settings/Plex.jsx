@@ -74,6 +74,31 @@ export default function Plex() {
                     {testStatus && <span className="small" style={{ color: testStatus.includes('Success') ? '#10b981' : '#ef4444' }}>{testStatus}</span>}
                 </div>
             </div>
+
+             {/* NEW DEFAULTS SECTION */}
+            <div style={{marginTop: '30px', borderTop: '1px solid var(--border)', paddingTop: '20px'}}>
+                <h3>Default Access Control</h3>
+                <p className="small" style={{marginBottom: '15px'}}>
+                    When a user is enabled, they will be granted access to these libraries.
+                </p>
+                
+                <div className="flex" style={{gap: '15px'}}>
+                    <div style={{flex: 1}}>
+                        <label className="small">Allowed Libraries (IDs or 'All')</label>
+                        <input className="input" placeholder="e.g. All" disabled value="All (Coming in v2)" />
+                    </div>
+                    <div style={{flex: 1}}>
+                        <label className="small">Sync Behavior</label>
+                        <div className="flex" style={{marginTop:'10px'}}>
+                            <input type="checkbox" checked={true} readOnly /> 
+                            <span className="small">Auto-Ban on Disable</span>
+                        </div>
+                    </div>
+                </div>
+                <p className="small" style={{color: 'var(--text-muted)', marginTop:'10px'}}>
+                    * Currently, "Disable" removes the user from the share list. "Enable" requires you to re-share manually until the Library ID fetcher is finished.
+                </p>
+            </div>
         </div>
     );
 }

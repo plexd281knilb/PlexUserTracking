@@ -5,7 +5,7 @@ import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from email.header import decode_header
-from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, save_payment_log
+from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, save_payment_log, load_settings
 
 # --- Helper: Extract Body Text ---
 def get_email_body(msg):
@@ -33,7 +33,6 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name):
     except:
         date_str = datetime.now().strftime('%Y-%m-%d')
 
-    # Create a log entry
     log_entry = {
         "date": date_str,
         "service": service_name,
@@ -45,22 +44,86 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name):
     }
 
     match_found = False
+    sender_clean = sender_name.lower().strip()
+
     for user in users:
-        # Simple fuzzy match: Is sender name inside user name or vice versa?
-        if sender_name.lower() in user['name'].lower() or user['name'].lower() in sender_name.lower():
+        # CHECK 1: Username match
+        if sender_clean in user.get('username', '').lower(): match_found = True
+        
+        # CHECK 2: Full Name match
+        if user.get('full_name') and sender_clean in user.get('full_name', '').lower(): match_found = True
+        
+        # CHECK 3: AKA / Alias match (split by commas)
+        if user.get('aka'):
+            aliases = [a.strip().lower() for a in user['aka'].split(',')]
+            if any(alias in sender_clean for alias in aliases): match_found = True
+
+        if match_found:
             if user.get('last_paid') != date_str:
                 user['last_paid'] = date_str
                 user['status'] = 'Active'
                 
                 # Update Log
                 log_entry['status'] = "Matched"
-                log_entry['mapped_user'] = user['name']
-                match_found = True
-                print(f"MATCH: {user['name']} paid {amount_str} via {service_name}")
+                log_entry['mapped_user'] = user['username']
+                print(f"MATCH: {user['username']} (AKA: {sender_name}) paid via {service_name}")
                 break
     
     save_payment_log(log_entry)
     return match_found
+
+# --- Plex Access Control ---
+def modify_plex_access(user, enable=True):
+    """
+    Enable = Placeholder for Re-inviting (Requires Library IDs)
+    Disable = Remove User from Shares
+    """
+    servers = load_servers()['plex']
+    results = []
+
+    for server in servers:
+        token = server['token']
+        headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
+        
+        try:
+            # 1. FIND USER ID on this server
+            r = requests.get('https://plex.tv/api/users', headers=headers)
+            if r.status_code != 200:
+                results.append(f"{server['name']}: Connection Failed")
+                continue
+
+            root = ET.fromstring(r.content)
+            plex_user_id = None
+            
+            # Find the Plex User ID matching our user's email or username
+            for u in root.findall('User'):
+                if u.get('email', '').lower() == user['email'].lower() or \
+                   u.get('username', '').lower() == user.get('plex_username', '').lower():
+                    plex_user_id = u.get('id')
+                    break
+            
+            if not plex_user_id:
+                results.append(f"{server['name']}: User not found on share list")
+                continue
+
+            if not enable:
+                # DISABLE: Delete the share
+                del_url = f"https://plex.tv/api/users/{plex_user_id}/servers/{server['id']}"
+                # Note: server['id'] in our DB might need to be mapped to the MachineIdentifier if different
+                # But typically for 'users' endpoint, we delete the friendship or server share.
+                # A safer generic 'Unfriend/Unshare' is:
+                requests.delete(f"https://plex.tv/api/friends/{plex_user_id}", headers=headers)
+                results.append(f"{server['name']}: Access Revoked")
+            
+            else:
+                # ENABLE: Requires re-inviting.
+                # Since we don't store library IDs yet, we just log this.
+                results.append(f"{server['name']}: Please manually re-share libraries")
+
+        except Exception as e:
+            results.append(f"{server['name']}: Error {str(e)}")
+
+    return results
 
 # --- Payment Scanners ---
 
@@ -68,8 +131,6 @@ def fetch_venmo_payments():
     accounts = load_payment_accounts('venmo')
     users = load_users()
     payment_count = 0
-    
-    # Subject: "Austin Bamrick paid you $180.00"
     venmo_pattern = re.compile(r"^(.*?) paid you (\$\d+\.\d{2})")
 
     for account in accounts:
@@ -82,7 +143,6 @@ def fetch_venmo_payments():
             status, messages = mail.search(None, '(FROM "venmo@venmo.com")')
             if status != 'OK': continue
 
-            # Only scan last 50 emails to avoid timeout loops
             email_ids = messages[0].split()
             recent_ids = email_ids[-50:] if len(email_ids) > 50 else email_ids
 
@@ -111,8 +171,6 @@ def fetch_paypal_payments():
     accounts = load_payment_accounts('paypal')
     users = load_users()
     payment_count = 0
-    
-    # Body: "Dane Bamrick sent you $30.00 USD"
     paypal_pattern = re.compile(r"([A-Za-z ]+) sent you (\$\d+\.\d{2}) USD")
 
     for account in accounts:
@@ -151,8 +209,6 @@ def fetch_zelle_payments():
     accounts = load_payment_accounts('zelle')
     users = load_users()
     payment_count = 0
-    
-    # Generic Zelle Pattern: "received $20.00 from John Doe"
     zelle_pattern = re.compile(r"received (\$\d+\.\d{2}) from ([A-Za-z ]+)")
 
     for account in accounts:
@@ -177,7 +233,6 @@ def fetch_zelle_payments():
                         
                         match = zelle_pattern.search(body)
                         if match:
-                            # Group 2 is Name, Group 1 is Amount for Zelle pattern
                             process_payment(users, match.group(2).strip(), match.group(1), msg["Date"], 'Zelle')
                             payment_count += 1
             mail.close(); mail.logout()
@@ -188,7 +243,7 @@ def fetch_zelle_payments():
     save_payment_accounts('zelle', accounts)
     return payment_count
 
-# --- TEST FUNCTIONS (For Settings Buttons) ---
+# --- TEST FUNCTIONS ---
 def test_plex_connection(token, url="https://plex.tv/api/users"):
     try:
         headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
@@ -211,7 +266,7 @@ def test_tautulli_connection(url, key):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-# --- PLEX / TAUTULLI IMPORTS (Single Server Helper) ---
+# --- PLEX / TAUTULLI IMPORTS ---
 def fetch_plex_users_single(token):
     headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
     response = requests.get('https://plex.tv/api/users', headers=headers)
@@ -229,59 +284,28 @@ def fetch_plex_users_single(token):
                 "plex_username": u.get('username'), "status": "Pending", "due": 0.00
             })
             count += 1
-    
     save_users(current_users)
     return count
 
 def fetch_tautulli_users_single(url, key):
-    # Ensure URL has http/https
-    if not url.startswith('http'):
-        url = 'http://' + url
+    if not url.startswith('http'): url = 'http://' + url
+    resp = requests.get(f"{url.rstrip('/')}/api/v2?apikey={key}&cmd=get_users", timeout=10)
+    data = resp.json()
+    current_users = load_users()
+    count = 0
+    
+    for u in data['response']['data']:
+        email_addr = u.get('email', '').lower()
+        if not email_addr: continue
+        if not any(cu['email'].lower() == email_addr for cu in current_users):
+            current_users.append({
+                "id": len(current_users) + 1, "name": u.get('username'), "email": email_addr,
+                "plex_username": u.get('username'), "status": "Pending", "due": 0.00
+            })
+            count += 1
+    save_users(current_users)
+    return count
 
-    try:
-        resp = requests.get(f"{url.rstrip('/')}/api/v2?apikey={key}&cmd=get_users", timeout=10)
-        data = resp.json()
-        
-        # DEBUG PRINT: Check what Tautulli is actually returning
-        print(f"DEBUG TAUTULLI: Found {len(data.get('response', {}).get('data', []))} raw users from {url}")
-        
-        current_users = load_users()
-        count = 0
-        
-        for u in data['response']['data']:
-            email_addr = u.get('email', '').lower()
-            
-            # Skip users without emails
-            if not email_addr:
-                print(f"Skipping user {u.get('username')} - No Email")
-                continue
-
-            # Check if email already exists
-            if not any(cu['email'].lower() == email_addr for cu in current_users):
-                print(f"Importing new user: {u.get('username')} ({email_addr})")
-                current_users.append({
-                    "id": len(current_users) + 1, 
-                    "name": u.get('username'), 
-                    "email": email_addr,
-                    "plex_username": u.get('username'), 
-                    "status": "Pending", 
-                    "due": 0.00,
-                    "last_paid": None
-                })
-                count += 1
-            else:
-                # Optional: Print duplicates to logs so you know why they were skipped
-                # print(f"Skipping {u.get('username')} - Already exists")
-                pass
-                
-        save_users(current_users)
-        return count
-
-    except Exception as e:
-        print(f"Error fetching from Tautulli ({url}): {e}")
-        return 0
-
-# --- MULTI-SERVER IMPORT HANDLERS ---
 def fetch_all_plex_users():
     servers = load_servers()['plex']
     total_imported = 0

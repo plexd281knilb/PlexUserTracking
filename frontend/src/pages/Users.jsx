@@ -18,7 +18,7 @@ const Users = () => {
                 apiGet('/payment_logs')
             ]);
             setUsers(uData);
-            setLogs(lData.filter(l => l.status === 'Unmapped')); // Only show unmapped for matching
+            setLogs(lData.filter(l => l.status === 'Unmapped'));
         } catch (e) { console.error(e); } 
         finally { setLoading(false); }
     };
@@ -35,7 +35,7 @@ const Users = () => {
     };
 
     const handleMatch = async (log) => {
-        if(!confirm(`Link payment of ${log.amount} from ${log.sender} to ${matchUser.username}?`)) return;
+        if(!window.confirm(`Link payment of ${log.amount} from ${log.sender} to ${matchUser.username}?`)) return;
         await apiPost(`/users/${matchUser.id}/match_payment`, {
             date: log.date,
             raw_text: log.raw_text
@@ -46,7 +46,7 @@ const Users = () => {
 
     const toggleStatus = async (user) => {
         const newStatus = user.status === 'Active' ? 'Disabled' : 'Active';
-        if(!confirm(`Mark ${user.username} as ${newStatus}?`)) return;
+        if(!window.confirm(`Mark ${user.username} as ${newStatus}?\n(This will attempt to update Plex access)`)) return;
         await apiPut(`/users/${user.id}`, { ...user, status: newStatus }, localStorage.getItem('admin_token'));
         fetchData();
     };
@@ -142,6 +142,16 @@ const Users = () => {
                                 <input className="input" value={editUser.full_name || ''} 
                                     onChange={e=>setEditUser({...editUser, full_name: e.target.value})} />
                             </div>
+                            
+                            <div>
+                                <label className="small">AKA / Aliases (Comma separated)</label>
+                                <input className="input" placeholder="e.g. Bobby, Big Bob" value={editUser.aka || ''} 
+                                    onChange={e=>setEditUser({...editUser, aka: e.target.value})} />
+                                <p className="small" style={{marginTop:'5px', fontSize:'0.7rem', color: 'var(--text-muted)'}}>
+                                    Used to match Venmo/Zelle names if they differ from Plex.
+                                </p>
+                            </div>
+
                             <div>
                                 <label className="small">Email</label>
                                 <input className="input" value={editUser.email || ''} 
@@ -201,7 +211,6 @@ const Users = () => {
     );
 };
 
-// Simple inline modal style
 const modalStyle = {
     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.7)',
