@@ -1,37 +1,35 @@
 # STAGE 1: Build the React Frontend
-FROM node:20-alpine as frontend-build
+FROM node:18-alpine as frontend-build
 WORKDIR /app/frontend
 
-# Copy frontend dependency files (package.json must be copied FIRST)
+# Copy package.json and install dependencies
 COPY frontend/package.json frontend/package-lock.json ./
-
-# Install dependencies
 RUN npm install
 
-# Copy all other frontend source code (now that dependencies are installed)
+# Copy the rest of the frontend code and build it
 COPY frontend/ ./
-
-# Build the React application
 RUN npm run build
 
 # STAGE 2: Set up the Flask Backend
-FROM python:3.11-slim
-WORKDIR /app
+FROM python:3.9-slim
 
-# Copy backend requirements and install them
+# 1. Install System Dependencies (needed for some Python packages)
+RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
+
+# 2. Set up Backend Workdir
+WORKDIR /app/backend
+
+# 3. Install Python Dependencies
 COPY backend/requirements.txt .
-# Ensure you install the IMAP library dependency if you use a non-standard one
-# If you are using standard libraries (imaplib), the below is sufficient.
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the backend source code
+# 4. Copy Backend Code
 COPY backend/ .
 
-# Copy the built React frontend from Stage 1 into a 'static_build' folder in the backend
-COPY --from=frontend-build /app/frontend/build ./static_build
+# 5. CRITICAL STEP: Copy the React Build from Stage 1
+# This takes the 'build' folder created in Stage 1 and puts it where Flask expects it
+COPY --from=frontend-build /app/frontend/build /app/frontend/build
 
-# Expose the port Flask runs on
-EXPOSE 5052
-
-# Run the application
+# 6. Run the Application
+# We run from /app/backend so the relative paths work
 CMD ["python", "app.py"]
