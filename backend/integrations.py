@@ -234,23 +234,52 @@ def fetch_plex_users_single(token):
     return count
 
 def fetch_tautulli_users_single(url, key):
-    resp = requests.get(f"{url.rstrip('/')}/api/v2?apikey={key}&cmd=get_users")
-    data = resp.json()
-    
-    current_users = load_users()
-    count = 0
-    
-    for u in data['response']['data']:
-        email_addr = u.get('email', '').lower()
-        if email_addr and not any(cu['email'].lower() == email_addr for cu in current_users):
-            current_users.append({
-                "id": len(current_users) + 1, "name": u.get('username'), "email": email_addr,
-                "plex_username": u.get('username'), "status": "Pending", "due": 0.00
-            })
-            count += 1
+    # Ensure URL has http/https
+    if not url.startswith('http'):
+        url = 'http://' + url
+
+    try:
+        resp = requests.get(f"{url.rstrip('/')}/api/v2?apikey={key}&cmd=get_users", timeout=10)
+        data = resp.json()
+        
+        # DEBUG PRINT: Check what Tautulli is actually returning
+        print(f"DEBUG TAUTULLI: Found {len(data.get('response', {}).get('data', []))} raw users from {url}")
+        
+        current_users = load_users()
+        count = 0
+        
+        for u in data['response']['data']:
+            email_addr = u.get('email', '').lower()
             
-    save_users(current_users)
-    return count
+            # Skip users without emails
+            if not email_addr:
+                print(f"Skipping user {u.get('username')} - No Email")
+                continue
+
+            # Check if email already exists
+            if not any(cu['email'].lower() == email_addr for cu in current_users):
+                print(f"Importing new user: {u.get('username')} ({email_addr})")
+                current_users.append({
+                    "id": len(current_users) + 1, 
+                    "name": u.get('username'), 
+                    "email": email_addr,
+                    "plex_username": u.get('username'), 
+                    "status": "Pending", 
+                    "due": 0.00,
+                    "last_paid": None
+                })
+                count += 1
+            else:
+                # Optional: Print duplicates to logs so you know why they were skipped
+                # print(f"Skipping {u.get('username')} - Already exists")
+                pass
+                
+        save_users(current_users)
+        return count
+
+    except Exception as e:
+        print(f"Error fetching from Tautulli ({url}): {e}")
+        return 0
 
 # --- MULTI-SERVER IMPORT HANDLERS ---
 def fetch_all_plex_users():
