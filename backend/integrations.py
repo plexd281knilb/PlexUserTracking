@@ -59,14 +59,18 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name):
             if any(alias in sender_clean for alias in aliases): match_found = True
 
         if match_found:
+            # Update User Logic
+            # We update if the date is different OR if we just want to ensure latest info is captured
+            # Generally, we update if it's a new payment.
             if user.get('last_paid') != date_str:
                 user['last_paid'] = date_str
+                user['last_payment_amount'] = amount_str  # <--- NEW: Store the Amount
                 user['status'] = 'Active'
                 
                 # Update Log
                 log_entry['status'] = "Matched"
                 log_entry['mapped_user'] = user['username']
-                print(f"MATCH: {user['username']} (AKA: {sender_name}) paid via {service_name}")
+                print(f"MATCH: {user['username']} (AKA: {sender_name}) paid {amount_str} via {service_name}")
                 break
     
     save_payment_log(log_entry)
@@ -280,8 +284,15 @@ def fetch_plex_users_single(token):
         email_addr = u.get('email', '').lower()
         if email_addr and not any(cu['email'].lower() == email_addr for cu in current_users):
             current_users.append({
-                "id": len(current_users) + 1, "name": u.get('username'), "email": email_addr,
-                "plex_username": u.get('username'), "status": "Pending", "due": 0.00
+                "id": len(current_users) + 1, 
+                "name": u.get('username'), 
+                "username": u.get('username'),
+                "email": email_addr,
+                "plex_username": u.get('username'), 
+                "status": "Pending", 
+                "payment_freq": "Exempt", # <--- DEFAULT IS NOW EXEMPT
+                "last_paid": None,
+                "last_payment_amount": None # <--- NEW FIELD
             })
             count += 1
     save_users(current_users)
@@ -299,8 +310,15 @@ def fetch_tautulli_users_single(url, key):
         if not email_addr: continue
         if not any(cu['email'].lower() == email_addr for cu in current_users):
             current_users.append({
-                "id": len(current_users) + 1, "name": u.get('username'), "email": email_addr,
-                "plex_username": u.get('username'), "status": "Pending", "due": 0.00
+                "id": len(current_users) + 1, 
+                "name": u.get('username'), 
+                "username": u.get('username'),
+                "email": email_addr,
+                "plex_username": u.get('username'), 
+                "status": "Pending", 
+                "payment_freq": "Exempt", # <--- DEFAULT IS NOW EXEMPT
+                "last_paid": None,
+                "last_payment_amount": None # <--- NEW FIELD
             })
             count += 1
     save_users(current_users)

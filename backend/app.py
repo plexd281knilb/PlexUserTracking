@@ -1,35 +1,37 @@
 import os
+import atexit
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
+from apscheduler.schedulers.background import BackgroundScheduler
+# Import the new automation function
+from automation import check_automation
 
-# 1. ROBUST PATH FINDING
-# We look for the 'build' folder in common Docker locations
-# Standard: /app/frontend/build (if backend is in /app/backend)
-# Fallback: /frontend/build
+# 1. PATH SETUP
 current_dir = os.getcwd()
 possible_paths = [
-    os.path.join(current_dir, '..', 'frontend', 'build'), # ../frontend/build
-    os.path.join(current_dir, 'frontend', 'build'),       # ./frontend/build
-    '/app/frontend/build',                                # Absolute Docker path
-    '/frontend/build'                                     # Root fallback
+    os.path.join(current_dir, '..', 'frontend', 'build'),
+    os.path.join(current_dir, 'frontend', 'build'),
+    '/app/frontend/build',
+    '/frontend/build'
 ]
 
-FRONTEND_FOLDER = None
+FRONTEND_FOLDER = current_dir
 for path in possible_paths:
     if os.path.exists(path):
         FRONTEND_FOLDER = path
         break
 
-# If we still can't find it, default to current dir so it doesn't crash, 
-# but the UI won't load until build is fixed.
-if not FRONTEND_FOLDER:
-    print("WARNING: Could not find React build folder. UI will not load.")
-    FRONTEND_FOLDER = current_dir
-
 app = Flask(__name__, static_folder=FRONTEND_FOLDER, static_url_path='/')
 CORS(app)
 
-# 2. Import Blueprints
+# 2. SETUP SCHEDULER
+# This runs the check_automation function every day at 9:00 AM server time
+scheduler = BackgroundScheduler()
+scheduler.add_job(func=check_automation, trigger="cron", hour=9)
+scheduler.start()
+atexit.register(lambda: scheduler.shutdown())
+
+# 3. REGISTER BLUEPRINTS
 from routes.users import users_bp
 from routes.settings import settings_bp
 from routes.dashboard import dashboard_bp
@@ -37,7 +39,6 @@ from routes.payments import payments_bp
 from routes.logs import logs_bp
 from routes.expenses import expenses_bp
 
-# 3. Register Blueprints
 app.register_blueprint(users_bp)
 app.register_blueprint(settings_bp)
 app.register_blueprint(dashboard_bp)
@@ -45,7 +46,7 @@ app.register_blueprint(payments_bp)
 app.register_blueprint(logs_bp)
 app.register_blueprint(expenses_bp)
 
-# 4. Serve React App
+# 4. SERVE FRONTEND
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
