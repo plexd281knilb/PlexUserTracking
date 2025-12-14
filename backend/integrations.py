@@ -59,15 +59,11 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name):
             if any(alias in sender_clean for alias in aliases): match_found = True
 
         if match_found:
-            # Update User Logic
-            # We update if the date is different OR if we just want to ensure latest info is captured
-            # Generally, we update if it's a new payment.
             if user.get('last_paid') != date_str:
                 user['last_paid'] = date_str
-                user['last_payment_amount'] = amount_str  # <--- NEW: Store the Amount
+                user['last_payment_amount'] = amount_str
                 user['status'] = 'Active'
                 
-                # Update Log
                 log_entry['status'] = "Matched"
                 log_entry['mapped_user'] = user['username']
                 print(f"MATCH: {user['username']} (AKA: {sender_name}) paid {amount_str} via {service_name}")
@@ -104,7 +100,6 @@ def modify_plex_access(user, enable=True):
             root = ET.fromstring(r.content)
             plex_user_id = None
             
-            # Find the Plex User ID matching our user's email or username
             for u in root.findall('User'):
                 if u.get('email', '').lower() == user['email'].lower() or \
                    u.get('username', '').lower() == user.get('plex_username', '').lower():
@@ -128,6 +123,78 @@ def modify_plex_access(user, enable=True):
             results.append(f"{server['name']}: Error {str(e)}")
 
     return results
+
+# --- NEW: Get Plex Libraries ---
+def get_plex_libraries(token):
+    """
+    Connects to Plex Resources to find the server URL, 
+    then fetches the library sections.
+    """
+    headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
+    
+    try:
+        # 1. Get Resources (Servers/Devices) from Plex.tv
+        res = requests.get('https://plex.tv/api/resources?includeHttps=1', headers=headers, timeout=10)
+        if res.status_code != 200:
+            return {"error": "Failed to connect to Plex.tv"}
+        
+        root = ET.fromstring(res.content)
+        server_device = None
+        connection_uri = None
+
+        # 2. Find the Plex Media Server device
+        for device in root.findall('Device'):
+            if device.get('product') == 'Plex Media Server':
+                if device.get('presence') == '1':
+                    server_device = device
+                    break
+        
+        if not server_device:
+            for device in root.findall('Device'):
+                if device.get('product') == 'Plex Media Server':
+                    server_device = device
+                    break
+
+        if not server_device:
+            return {"error": "No Plex Media Server found for this account."}
+
+        # 3. Find a working Connection URI (Prefer Local)
+        for conn in server_device.findall('Connection'):
+            uri = conn.get('uri')
+            if conn.get('local') == '1':
+                connection_uri = uri
+                break
+        
+        if not connection_uri:
+            connections = server_device.findall('Connection')
+            if connections:
+                connection_uri = connections[0].get('uri')
+
+        if not connection_uri:
+            return {"error": "Could not find a valid connection URL for the server."}
+
+        print(f"DEBUG: Connecting to {connection_uri}")
+
+        # 4. Fetch Libraries (Sections) from that URL
+        lib_res = requests.get(f"{connection_uri}/library/sections", headers=headers, timeout=10, verify=False)
+        
+        if lib_res.status_code != 200:
+            return {"error": f"Failed to fetch libraries: {lib_res.status_code}"}
+
+        lib_root = ET.fromstring(lib_res.content)
+        libraries = []
+        for directory in lib_root.findall('Directory'):
+            libraries.append({
+                "id": directory.get('key'),
+                "title": directory.get('title'),
+                "type": directory.get('type')
+            })
+
+        return {"status": "success", "libraries": libraries, "server_name": server_device.get('name')}
+
+    except Exception as e:
+        print(f"PLEX LIB ERROR: {e}")
+        return {"error": str(e)}
 
 # --- Payment Scanners ---
 
@@ -290,9 +357,9 @@ def fetch_plex_users_single(token):
                 "email": email_addr,
                 "plex_username": u.get('username'), 
                 "status": "Pending", 
-                "payment_freq": "Exempt", # <--- DEFAULT IS NOW EXEMPT
+                "payment_freq": "Exempt",
                 "last_paid": None,
-                "last_payment_amount": None # <--- NEW FIELD
+                "last_payment_amount": None
             })
             count += 1
     save_users(current_users)
@@ -316,9 +383,9 @@ def fetch_tautulli_users_single(url, key):
                 "email": email_addr,
                 "plex_username": u.get('username'), 
                 "status": "Pending", 
-                "payment_freq": "Exempt", # <--- DEFAULT IS NOW EXEMPT
+                "payment_freq": "Exempt",
                 "last_paid": None,
-                "last_payment_amount": None # <--- NEW FIELD
+                "last_payment_amount": None
             })
             count += 1
     save_users(current_users)

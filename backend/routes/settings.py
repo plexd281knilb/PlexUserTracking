@@ -1,15 +1,9 @@
 ﻿from flask import Blueprint, jsonify, request
-from database import load_settings, save_settings, load_servers, add_server, delete_server
-from integrations import test_plex_connection, test_tautulli_connection
+from database import load_settings, save_settings, load_servers, save_servers, add_server, delete_server
+from integrations import test_plex_connection, test_tautulli_connection, get_plex_libraries
 
-# --- 1. CRITICAL: Initialize the Blueprint FIRST ---
-# This line creates the variable 'settings_bp' so it can be used below.
 settings_bp = Blueprint('settings', __name__, url_prefix='/api/settings')
 
-
-# --- 2. NOW we can define the routes using that variable ---
-
-# --- General Settings Routes ---
 @settings_bp.route('', methods=['GET'])
 def get_settings():
     return jsonify(load_settings())
@@ -17,38 +11,55 @@ def get_settings():
 @settings_bp.route('', methods=['POST'])
 def update_settings():
     data = request.json
-    save_settings(data)
-    return jsonify({'message': 'Settings saved successfully'})
+    current_settings = load_settings()
+    current_settings.update(data)
+    save_settings(current_settings)
+    return jsonify({'message': 'Settings updated'})
 
-# --- Multi-Server Management Routes ---
 @settings_bp.route('/servers', methods=['GET'])
 def get_servers():
     return jsonify(load_servers())
 
 @settings_bp.route('/servers/<type>', methods=['POST'])
 def add_new_server(type):
-    # type will be 'plex' or 'tautulli'
     data = request.json
+    if not data: return jsonify({'error': 'No data'}), 400
+    
     result = add_server(type, data)
-    return jsonify(result)
+    return jsonify({'message': 'Server added', 'server': result})
 
-@settings_bp.route('/servers/<type>/<int:id>', methods=['DELETE'])
-def remove_server(type, id):
-    delete_server(type, id)
-    return jsonify({'status': 'deleted'})
+@settings_bp.route('/servers/<type>/<int:server_id>', methods=['DELETE'])
+def remove_server(type, server_id):
+    delete_server(type, server_id)
+    return jsonify({'message': 'Server removed'})
 
-# --- Connection Testing Routes ---
 @settings_bp.route('/test/plex', methods=['POST'])
 def test_plex():
-    res = test_plex_connection(request.json.get('token'))
-    return jsonify(res)
+    token = request.json.get('token')
+    return jsonify(test_plex_connection(token))
 
 @settings_bp.route('/test/tautulli', methods=['POST'])
 def test_tautulli():
-    d = request.json
-    res = test_tautulli_connection(d.get('url'), d.get('key'))
-    return jsonify(res)
+    url = request.json.get('url')
+    key = request.json.get('key')
+    return jsonify(test_tautulli_connection(url, key))
 
-@settings_bp.route('/admin/setup-required', methods=['GET'])
-def setup_required():
-    return jsonify({'setup_required': False})
+# --- NEW ROUTE ---
+@settings_bp.route('/plex/libraries', methods=['POST'])
+def fetch_libraries():
+    """Fetches libraries using a provided token"""
+    token = request.json.get('token')
+    
+    # If no token provided in request, try to find a saved one
+    if not token:
+        servers = load_servers().get('plex', [])
+        if servers:
+            token = servers[0]['token']
+        else:
+            return jsonify({'error': 'No token provided and no servers saved'}), 400
+
+    result = get_plex_libraries(token)
+    if 'error' in result:
+        return jsonify(result), 500
+    
+    return jsonify(result)
