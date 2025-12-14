@@ -1,34 +1,64 @@
-import axios from 'axios';
+// frontend/src/api.js
 
-// Base URL for backend API (uses relative path for single container)
-export const API_BASE_URL = `/api`;
+const getBaseUrl = () => {
+    // If we are in development (running on port 3000), point to port 5000
+    // If in production (docker), use relative path
+    if (window.location.hostname === 'localhost' && window.location.port === '3000') {
+        return 'http://localhost:5000/api';
+    }
+    return '/api';
+};
 
-// Utility function to handle GET requests
-export async function apiGet(path, token = null) {
-    const headers = {};
+const BASE_URL = getBaseUrl();
+
+const request = async (endpoint, method = 'GET', body = null, token = null) => {
+    const headers = {
+        'Content-Type': 'application/json',
+    };
+
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
     }
-    const response = await axios.get(`${API_BASE_URL}${path}`, { headers });
-    return response.data;
-}
 
-// Utility function to handle POST requests
-export async function apiPost(path, data = {}, token = null) {
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
-    const response = await axios.post(`${API_BASE_URL}${path}`, data, { headers });
-    return response.data;
-}
+    const config = {
+        method,
+        headers,
+    };
 
-// Utility function to handle DELETE requests
-export async function apiDelete(path, token = null) {
-    const headers = {};
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+    if (body) {
+        config.body = JSON.stringify(body);
     }
-    const response = await axios.delete(`${API_BASE_URL}${path}`, { headers });
-    return response.data;
-}
+
+    try {
+        const response = await fetch(`${BASE_URL}${endpoint}`, config);
+        
+        // Handle 401 Unauthorized (optional: redirect to login)
+        if (response.status === 401) {
+            console.warn("Unauthorized request");
+        }
+
+        // Return empty object for 204 No Content
+        if (response.status === 204) return {};
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || data.message || 'API Request Failed');
+        }
+        
+        return data;
+    } catch (error) {
+        console.error(`API Error (${method} ${endpoint}):`, error);
+        throw error;
+    }
+};
+
+// --- EXPORTED FUNCTIONS ---
+
+export const apiGet = (endpoint, token = null) => request(endpoint, 'GET', null, token);
+
+export const apiPost = (endpoint, body, token = null) => request(endpoint, 'POST', body, token);
+
+export const apiPut = (endpoint, body, token = null) => request(endpoint, 'PUT', body, token);
+
+export const apiDelete = (endpoint, token = null) => request(endpoint, 'DELETE', null, token);
