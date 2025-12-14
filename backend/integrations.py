@@ -78,6 +78,11 @@ def modify_plex_access(user, enable=True):
     Enable = Placeholder for Re-inviting (Requires Library IDs)
     Disable = Remove User from Shares
     """
+    # SAFETY CHECK: Never disable an Exempt user
+    if not enable and user.get('payment_freq') == 'Exempt':
+        print(f"SAFETY: Skipping disable for exempt user {user.get('username')}")
+        return [f"Skipped {user.get('username')}: User is Exempt"]
+
     servers = load_servers()['plex']
     results = []
 
@@ -107,17 +112,12 @@ def modify_plex_access(user, enable=True):
                 continue
 
             if not enable:
-                # DISABLE: Delete the share
-                del_url = f"https://plex.tv/api/users/{plex_user_id}/servers/{server['id']}"
-                # Note: server['id'] in our DB might need to be mapped to the MachineIdentifier if different
-                # But typically for 'users' endpoint, we delete the friendship or server share.
-                # A safer generic 'Unfriend/Unshare' is:
+                # DISABLE: Delete the friendship/share
                 requests.delete(f"https://plex.tv/api/friends/{plex_user_id}", headers=headers)
                 results.append(f"{server['name']}: Access Revoked")
             
             else:
-                # ENABLE: Requires re-inviting.
-                # Since we don't store library IDs yet, we just log this.
+                # ENABLE: Requires re-inviting logic
                 results.append(f"{server['name']}: Please manually re-share libraries")
 
         except Exception as e:

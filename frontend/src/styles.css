@@ -1,11 +1,12 @@
 /* frontend/src/styles.css */
 :root {
-    --bg-app: #0f172a;       
+    --bg-app: #0f172a;       /* Dark Blue Background */
+    --bg-sidebar: #1e293b;   /* Slightly lighter Blue for Sidebar */
     --bg-card: #1e293b;      
     --bg-input: #334155;     
     --text-main: #f1f5f9;    
     --text-muted: #94a3b8;   
-    --accent: #38bdf8;       
+    --accent: #38bdf8;       /* Light Blue Accent */
     --accent-hover: #0ea5e9; 
     --danger: #ef4444;       
     --border: #334155;       
@@ -19,9 +20,78 @@ body {
     color: var(--text-main);
 }
 
-.app-root { display: flex; height: 100vh; overflow: hidden; }
-.main { flex: 1; overflow-y: auto; padding: 30px; background-color: var(--bg-app); }
+/* --- MAIN LAYOUT --- */
+.app-root {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
 
+.main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 30px;
+    background-color: var(--bg-app);
+}
+
+/* --- SIDEBAR --- */
+.sidebar {
+    width: 260px;
+    background-color: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    flex-shrink: 0; /* Prevent shrinking */
+}
+
+.sidebar h2 {
+    color: var(--text-main);
+    font-size: 1.5rem;
+    margin-top: 0;
+    margin-bottom: 30px;
+    padding-left: 10px;
+    letter-spacing: 1px;
+}
+
+.nav-group {
+    margin-bottom: 25px;
+}
+
+.nav-label {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    padding-left: 12px;
+}
+
+.nav-link {
+    display: block;
+    padding: 10px 12px;
+    color: var(--text-muted);
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    margin-bottom: 4px;
+}
+
+.nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+    transform: translateX(3px);
+}
+
+.nav-link.active {
+    background-color: var(--accent);
+    color: #0f172a; /* Dark text on active button */
+    font-weight: 600;
+}
+
+/* --- CARDS & FORMS --- */
 .card {
     background-color: var(--bg-card);
     border: 1px solid var(--border);
@@ -32,8 +102,7 @@ body {
 }
 
 h1 { margin-top: 0; font-size: 1.8rem; font-weight: 700; color: var(--text-main); }
-h2 { font-size: 1.4rem; color: var(--text-main); }
-h3 { font-size: 1.1rem; color: var(--text-main); margin-bottom: 15px; }
+h3 { font-size: 1.1rem; color: var(--text-main); margin-bottom: 15px; margin-top: 0; }
 .small { font-size: 0.85rem; color: var(--text-muted); }
 
 .input {
@@ -62,13 +131,8 @@ h3 { font-size: 1.1rem; color: var(--text-main); margin-bottom: 15px; }
 }
 .button:hover { background-color: var(--accent-hover); transform: translateY(-1px); }
 
+/* --- TABLES --- */
 .table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 15px; }
 .table th { text-align: left; padding: 15px; color: var(--text-muted); border-bottom: 1px solid var(--border); }
 .table td { padding: 15px; border-bottom: 1px solid var(--border); color: var(--text-main); }
 .flex { display: flex; align-items: center; gap: 15px; }
-
-/* Settings Tabs */
-.settings-nav { display: flex; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 15px; margin-bottom: 25px; overflow-x: auto; }
-.settings-nav a { text-decoration: none; color: var(--text-muted); padding: 8px 16px; border-radius: 20px; font-weight: 600; transition: all 0.2s; white-space: nowrap; }
-.settings-nav a:hover { background-color: rgba(255,255,255,0.05); color: var(--text-main); }
-.settings-nav a.active { background-color: var(--accent); color: #0f172a; }

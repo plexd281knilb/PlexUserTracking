@@ -14,26 +14,26 @@ import NotificationSettings from './pages/settings/Notifications';
 import SystemSettings from './pages/settings/System';
 import ScanSettings from './pages/settings/Scan';
 
-// Sidebar Component
+// Sidebar Component (Uses classes from styles.css now)
 const Sidebar = () => (
-    <div className="sidebar" style={{width: '250px', backgroundColor: '#1e293b', padding: '20px', display: 'flex', flexDirection: 'column', borderRight: '1px solid #334155'}}>
-        <h2 style={{color: '#f1f5f9', marginBottom: '30px', paddingLeft: '10px'}}>PLEX TRACKER</h2>
+    <div className="sidebar">
+        <h2>PLEX TRACKER</h2>
         
         <div className="nav-group">
-            <p className="nav-label" style={{color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '10px', paddingLeft: '10px'}}>Dashboard</p>
+            <p className="nav-label">Dashboard</p>
             <NavLink to="/" className={({isActive}) => isActive ? 'nav-link active' : 'nav-link'}>📊 Overview</NavLink>
             <NavLink to="/users" className={({isActive}) => isActive ? 'nav-link active' : 'nav-link'}>👥 Users</NavLink>
         </div>
 
-        <div className="nav-group" style={{marginTop: '20px'}}>
-            <p className="nav-label" style={{color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '10px', paddingLeft: '10px'}}>Payments</p>
+        <div className="nav-group">
+            <p className="nav-label">Payments</p>
             <NavLink to="/payments/venmo" className={({isActive}) => isActive ? 'nav-link active' : 'nav-link'}>🔵 Venmo</NavLink>
             <NavLink to="/payments/zelle" className={({isActive}) => isActive ? 'nav-link active' : 'nav-link'}>🟣 Zelle</NavLink>
             <NavLink to="/payments/paypal" className={({isActive}) => isActive ? 'nav-link active' : 'nav-link'}>💳 PayPal</NavLink>
         </div>
 
-        <div className="nav-group" style={{marginTop: '20px'}}>
-            <p className="nav-label" style={{color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '10px', paddingLeft: '10px'}}>System</p>
+        <div className="nav-group">
+            <p className="nav-label">System</p>
             <NavLink to="/expenses" className={({isActive}) => isActive ? 'nav-link active' : 'nav-link'}>💰 Expenses</NavLink>
             <NavLink to="/settings/plex" className={({isActive}) => isActive ? 'nav-link active' : 'nav-link'}>⚙️ Settings</NavLink>
         </div>
@@ -43,9 +43,9 @@ const Sidebar = () => (
 function App() {
   return (
     <Router>
-      <div className="app-root" style={{display: 'flex', minHeight: '100vh', backgroundColor: '#0f172a', color: '#f1f5f9'}}>
+      <div className="app-root">
         <Sidebar />
-        <div className="main" style={{flex: 1, padding: '30px', overflowY: 'auto'}}>
+        <div className="main">
           <Routes>
             {/* Main Routes */}
             <Route path="/" element={<Dashboard />} />
@@ -64,7 +64,8 @@ function App() {
             <Route path="/settings/system" element={<SystemSettings />} />
             <Route path="/settings/scan" element={<ScanSettings />} />
 
-            {/* CATCH-ALL REDIRECT: Sends 404s back to Dashboard */}
+            {/* CATCH-ALL REDIRECT */}
+            {/* This MUST be the last Route. It catches any URL not listed above and sends to "/" */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>

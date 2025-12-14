@@ -45,6 +45,12 @@ const Users = () => {
     };
 
     const toggleStatus = async (user) => {
+        // Prevent disabling exempt users via UI
+        if (user.status === 'Active' && user.payment_freq === 'Exempt') {
+            alert("This user is Exempt and cannot be disabled.");
+            return;
+        }
+
         const newStatus = user.status === 'Active' ? 'Disabled' : 'Active';
         if(!window.confirm(`Mark ${user.username} as ${newStatus}?\n(This will attempt to update Plex access)`)) return;
         await apiPut(`/users/${user.id}`, { ...user, status: newStatus }, localStorage.getItem('admin_token'));
@@ -60,6 +66,15 @@ const Users = () => {
             fetchData();
         } catch (e) { alert('Import failed.'); }
         setLoading(false);
+    };
+
+    // Helper to get badge color
+    const getFreqBadgeColor = (freq) => {
+        switch(freq) {
+            case 'Exempt': return '#eab308'; // Gold
+            case 'Yearly': return '#8b5cf6'; // Purple
+            default: return '#64748b';       // Grey (Monthly)
+        }
     };
 
     return (
@@ -94,8 +109,9 @@ const Users = () => {
                                 <td>
                                     <span style={{
                                         fontSize:'0.75rem', padding:'2px 6px', borderRadius:'4px',
-                                        backgroundColor: u.payment_freq === 'Yearly' ? '#8b5cf6' : '#64748b',
-                                        color: 'white'
+                                        backgroundColor: getFreqBadgeColor(u.payment_freq),
+                                        color: u.payment_freq === 'Exempt' ? 'black' : 'white',
+                                        fontWeight: 'bold'
                                     }}>
                                         {u.payment_freq || 'Monthly'}
                                     </span>
@@ -119,7 +135,12 @@ const Users = () => {
                                             onClick={() => setMatchUser(u)}>
                                             Match Pay
                                         </button>
-                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: u.status==='Active'?'#ef4444':'#10b981'}} 
+                                        <button className="button" 
+                                            style={{
+                                                padding:'4px 8px', fontSize:'0.75rem', 
+                                                backgroundColor: u.status==='Active' ? '#ef4444' : '#10b981',
+                                                opacity: u.payment_freq === 'Exempt' && u.status === 'Active' ? 0.5 : 1
+                                            }} 
                                             onClick={() => toggleStatus(u)}>
                                             {u.status==='Active' ? 'Disable' : 'Enable'}
                                         </button>
@@ -163,6 +184,7 @@ const Users = () => {
                                     onChange={e=>setEditUser({...editUser, payment_freq: e.target.value})}>
                                     <option value="Monthly">Monthly</option>
                                     <option value="Yearly">Yearly</option>
+                                    <option value="Exempt">Exempt (Do Not Disable)</option>
                                 </select>
                             </div>
                             <div className="flex" style={{justifyContent:'flex-end'}}>
