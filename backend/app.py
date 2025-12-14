@@ -3,9 +3,11 @@ import atexit
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
+# Import your automation file (ensure backend/automation.py exists)
 from automation import check_automation
 
-# 1. PATH SETUP (Find the frontend build folder)
+# 1. ROBUST PATH FINDING
+# Finds the React build folder no matter where Docker puts it
 current_dir = os.getcwd()
 possible_paths = [
     os.path.join(current_dir, '..', 'frontend', 'build'),
@@ -20,14 +22,19 @@ for path in possible_paths:
         FRONTEND_FOLDER = path
         break
 
-app = Flask(__name__, static_folder=FRONTEND_FOLDER, static_url_path='/')
+# Initialize Flask (Remove static_url_path to avoid conflicts)
+app = Flask(__name__, static_folder=FRONTEND_FOLDER)
 CORS(app)
 
 # 2. SETUP SCHEDULER
-scheduler = BackgroundScheduler()
-scheduler.add_job(func=check_automation, trigger="cron", hour=9)
-scheduler.start()
-atexit.register(lambda: scheduler.shutdown())
+# Runs the daily check (Reminders/Disabling) every day at 9:00 AM
+try:
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(func=check_automation, trigger="cron", hour=9)
+    scheduler.start()
+    atexit.register(lambda: scheduler.shutdown())
+except Exception as e:
+    print(f"Scheduler failed to start: {e}")
 
 # 3. REGISTER BLUEPRINTS
 from routes.users import users_bp
@@ -44,7 +51,8 @@ app.register_blueprint(payments_bp)
 app.register_blueprint(logs_bp)
 app.register_blueprint(expenses_bp)
 
-# 4. SERVE FRONTEND (THE FIX)
+# 4. THE CATCH-ALL ROUTE (Fixes "Invalid URL" on Refresh)
+# This function handles EVERY URL that isn't an API endpoint.
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
@@ -52,13 +60,13 @@ def serve(path):
     if path.startswith('api/'):
         return jsonify(error="API endpoint not found"), 404
 
-    # B. If the file actually exists (like favicon.ico or logo.png), serve it
+    # B. If the browser is asking for a real file (like logo.png), serve it
     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
     
-    # C. FOR EVERYTHING ELSE: Serve index.html
-    # This fixes the refresh issue. The browser gets index.html,
-    # and React Router takes over to show the correct page.
+    # C. FOR EVERYTHING ELSE (Users, Settings, etc.): Serve index.html
+    # This tricks the browser into loading the React app, which then
+    # reads the URL and shows the correct page.
     return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
