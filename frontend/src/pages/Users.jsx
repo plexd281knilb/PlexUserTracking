@@ -65,15 +65,124 @@ const Users = () => {
         fetchData();
     };
 
+    // ... (imports and state remain the same) ...
+
+    // --- ACTIONS ---
     const handleMatch = async (log) => {
         if(!window.confirm(`Link payment of ${log.amount} from ${log.sender} to ${matchUser.username}?`)) return;
+        
         await apiPost(`/users/${matchUser.id}/match_payment`, {
             date: log.date,
-            raw_text: log.raw_text
+            raw_text: log.raw_text,
+            amount: log.amount,  // Send Amount
+            sender: log.sender   // Send Sender Name
         }, localStorage.getItem('admin_token'));
+        
         setMatchUser(null);
         fetchData();
     };
+
+    const handleUnmap = async (log) => {
+        if(!window.confirm(`Unlink this payment? It will become 'Unmapped'.`)) return;
+        
+        await apiPost(`/users/unmap_payment`, {
+            date: log.date,
+            raw_text: log.raw_text
+        }, localStorage.getItem('admin_token'));
+        
+        // Refresh logs list inside the modal immediately? 
+        // We need to close modal or refresh data.
+        // Easiest is to refresh data and keep modal open (requires complicated state)
+        // OR just close modal and refresh.
+        alert("Unmapped.");
+        setMatchUser(null);
+        fetchData();
+    };
+
+    // ... (Keep handleSaveUser, toggleStatus, etc.) ...
+
+            {/* EDIT USER MODAL - Added Last Paid Field */}
+            {editUser && (
+                <div style={modalStyle}>
+                    <div className="card" style={{minWidth: '400px', margin: 'auto'}}>
+                        <h3>Edit User: {editUser.username}</h3>
+                        <form onSubmit={handleSaveUser} style={{display:'grid', gap:'15px'}}>
+                            {/* ... (Keep Name, AKA, Email fields) ... */}
+                             <div><label className="small">Full Name</label><input className="input" value={editUser.full_name || ''} onChange={e=>setEditUser({...editUser, full_name: e.target.value})} /></div>
+                             <div><label className="small">AKA / Aliases</label><input className="input" value={editUser.aka || ''} onChange={e=>setEditUser({...editUser, aka: e.target.value})} /></div>
+                             <div><label className="small">Email</label><input className="input" value={editUser.email || ''} onChange={e=>setEditUser({...editUser, email: e.target.value})} /></div>
+
+                            {/* NEW: Last Paid Date Field */}
+                            <div>
+                                <label className="small">Last Paid Date (YYYY-MM-DD)</label>
+                                <input className="input" type="date" value={editUser.last_paid || ''} 
+                                    onChange={e=>setEditUser({...editUser, last_paid: e.target.value})} />
+                                <p className="small" style={{marginTop:'5px', color:'var(--text-muted)'}}>
+                                    Manually correct date if needed.
+                                </p>
+                            </div>
+
+                            {/* ... (Keep Frequency and Buttons) ... */}
+                            <div>
+                                <label className="small">Payment Frequency</label>
+                                <select className="input" value={editUser.payment_freq || 'Exempt'} onChange={e=>setEditUser({...editUser, payment_freq: e.target.value})}>
+                                    <option value="Exempt">Exempt</option>
+                                    <option value="Monthly">Monthly</option>
+                                    <option value="Yearly">Yearly</option>
+                                </select>
+                            </div>
+                            <div className="flex" style={{justifyContent:'flex-end'}}>
+                                <button type="button" className="button" style={{backgroundColor:'#64748b', marginRight:'10px'}} onClick={()=>setEditUser(null)}>Cancel</button>
+                                <button type="submit" className="button">Save Changes</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* MATCH PAYMENT MODAL - Added Unmap Button */}
+            {matchUser && (
+                <div style={modalStyle}>
+                    <div className="card" style={{minWidth: '600px', maxHeight: '80vh', overflowY: 'auto', margin: 'auto'}}>
+                        <h3>Match Payment to {matchUser.username}</h3>
+                        <p className="small">Select a transaction below:</p>
+                        
+                        <table className="table" style={{marginTop:'15px'}}>
+                            <thead><tr><th>Date</th><th>Sender</th><th>Amount</th><th>Action</th></tr></thead>
+                            <tbody>
+                                {logs.map((log, i) => (
+                                    <tr key={i} style={{opacity: log.status === 'Matched' ? 0.8 : 1}}>
+                                        <td>{log.date}</td>
+                                        <td>{log.sender}</td>
+                                        <td>{log.amount}</td>
+                                        <td>
+                                            {log.status === 'Matched' ? (
+                                                <div className="flex" style={{gap: '5px'}}>
+                                                    <span className="small" style={{color: '#10b981', alignSelf:'center'}}>
+                                                        {log.mapped_user}
+                                                    </span>
+                                                    <button className="button" style={{padding:'2px 8px', fontSize:'0.7rem', backgroundColor: '#64748b'}} 
+                                                        onClick={() => handleUnmap(log)}>
+                                                        Unmap
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button className="button" style={{padding:'2px 8px', fontSize:'0.7rem'}} 
+                                                    onClick={() => handleMatch(log)}>
+                                                    Select
+                                                </button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        <div style={{marginTop:'20px', textAlign:'right'}}>
+                            <button className="button" style={{backgroundColor:'#64748b'}} onClick={()=>setMatchUser(null)}>Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
     const toggleStatus = async (user) => {
         if (user.status === 'Active' && user.payment_freq === 'Exempt') {
