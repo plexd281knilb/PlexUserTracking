@@ -21,56 +21,146 @@ def get_email_body(msg):
     return ""
 
 # --- Payment Processing Logic ---
-def process_payment(users, sender_name, amount_str, date_obj, service_name):
-    # Convert date
+# ... (Keep imports and get_email_body helper) ...
+
+# --- STRICTER PAYMENT PROCESSING ---
+def process_payment(users, sender_name, amount_str, date_obj, service_name, existing_logs=None):
+    # 1. Parse Date
     try:
-        date_tuple = email.utils.parsedate_tz(date_obj)
-        if date_tuple:
-            local_date = datetime.fromtimestamp(email.utils.mktime_tz(date_tuple))
-            date_str = local_date.strftime('%Y-%m-%d')
+        if isinstance(date_obj, str):
+            date_str = date_obj # Already string
         else:
-            date_str = datetime.now().strftime('%Y-%m-%d')
+            date_tuple = email.utils.parsedate_tz(date_obj)
+            if date_tuple:
+                local_date = datetime.fromtimestamp(email.utils.mktime_tz(date_tuple))
+                date_str = local_date.strftime('%Y-%m-%d')
+            else:
+                date_str = datetime.now().strftime('%Y-%m-%d')
     except:
         date_str = datetime.now().strftime('%Y-%m-%d')
 
-    log_entry = {
-        "date": date_str,
-        "service": service_name,
-        "sender": sender_name,
-        "amount": amount_str,
-        "raw_text": f"{sender_name} sent {amount_str}",
-        "status": "Unmapped",
-        "mapped_user": None
-    }
+    # 2. Check if log already exists (Avoid Duplicates)
+    # If we are passing in existing_logs (for remapping), we skip this check
+    if existing_logs is None:
+        existing_logs = load_payment_logs()
+        
+    # Check if this exact payment is already logged
+    # (Matches Date, Sender, Amount, and Raw Text)
+    raw_text = f"{sender_name} sent {amount_str}"
+    
+    # Find existing log entry if it exists
+    log_entry = None
+    for log in existing_logs:
+        if log.get('raw_text') == raw_text and log.get('date') == date_str:
+            log_entry = log
+            break
+    
+    # If not found, create a new one
+    if not log_entry:
+        log_entry = {
+            "date": date_str,
+            "service": service_name,
+            "sender": sender_name,
+            "amount": amount_str,
+            "raw_text": raw_text,
+            "status": "Unmapped",
+            "mapped_user": None
+        }
+        existing_logs.insert(0, log_entry) # Add to top
 
+    # 3. MATCHING LOGIC (STRICTER)
     match_found = False
     sender_clean = sender_name.lower().strip()
+    
+    # Tokenize sender name (e.g. "Austin Bamrick" -> ["austin", "bamrick"])
+    sender_tokens = sender_clean.split()
 
     for user in users:
-        # CHECK 1: Username match
-        if sender_clean in user.get('username', '').lower(): match_found = True
-        
-        # CHECK 2: Full Name match
-        if user.get('full_name') and sender_clean in user.get('full_name', '').lower(): match_found = True
-        
-        # CHECK 3: AKA / Alias match (split by commas)
-        if user.get('aka'):
-            aliases = [a.strip().lower() for a in user['aka'].split(',')]
-            if any(alias in sender_clean for alias in aliases): match_found = True
+        # SKIP checking generic usernames to avoid bad matches
+        username = user.get('username', '').lower().strip()
+        full_name = user.get('full_name', '').lower().strip()
+        aka_list = [x.strip().lower() for x in user.get('aka', '').split(',') if x.strip()]
 
+        # CHECK 1: Exact Username Match (if not empty)
+        if username and username == sender_clean:
+            match_found = True
+
+        # CHECK 2: Full Name Match (Exact or contain full name)
+        # We only check if full_name is at least 3 chars to avoid matching "Ed" to "Edward" incorrectly
+        if not match_found and full_name and len(full_name) > 3:
+            if full_name in sender_clean or sender_clean in full_name:
+                match_found = True
+
+        # CHECK 3: Alias (AKA) Match - EXACT or Token Match
+        if not match_found and aka_list:
+            for alias in aka_list:
+                # "Bobby" matches "Bobby Smith"
+                if alias == sender_clean or (len(alias) > 3 and alias in sender_clean):
+                    match_found = True
+                    break
+
+        # ACTION IF MATCHED
         if match_found:
+            # Update User
             if user.get('last_paid') != date_str:
                 user['last_paid'] = date_str
                 user['last_payment_amount'] = amount_str
                 user['status'] = 'Active'
-                
-                log_entry['status'] = "Matched"
-                log_entry['mapped_user'] = user['username']
-                print(f"MATCH: {user['username']} (AKA: {sender_name}) paid {amount_str} via {service_name}")
-                break
+            
+            # Update Log Status (The missing link!)
+            log_entry['status'] = "Matched"
+            log_entry['mapped_user'] = user['username']
+            
+            print(f"MATCH FOUND: {user['username']} -> {sender_name} (${amount_str})")
+            break
     
-    save_payment_log(log_entry)
+    # If we are running a single scan, save everything. 
+    # If remapping, the caller will save.
+    if existing_logs is not None:
+        from database import save_data
+        save_data('payment_logs.json', existing_logs)
+        save_users(users)
+        
     return match_found
+
+# ... (Keep existing Plex/Tautulli/Scanner functions) ...
+
+# --- NEW: REMAP EXISTING PAYMENTS ---
+def remap_existing_payments():
+    """
+    Re-runs the matching logic on ALL existing 'Unmapped' logs 
+    against the current User database.
+    """
+    print("Starting manual remap...")
+    users = load_users()
+    logs = load_payment_logs() # Load all logs
+    
+    count = 0
+    for log in logs:
+        # Only check unmapped ones to save time, OR check all to fix bad matches?
+        # Let's check ALL to fix the "Austin" -> "Anthony" error if user manually clears it.
+        # Ideally, we only look at Unmapped, but since you have a bad match, let's look at all 
+        # that aren't 'Manual Match'.
+        
+        # Reset bad match if needed (optional logic, but safer to just process unmapped for now)
+        if log['status'] == 'Unmapped': 
+            # Re-run logic
+            # We treat the log as data inputs for process_payment
+            # Note: process_payment saves the files, which is slow in a loop.
+            # We should optimize, but for <1000 logs it's fine.
+            
+            # Extract data from log
+            sender = log['sender']
+            amount = log['amount']
+            date = log['date']
+            service = log['service']
+            
+            # Pass the WHOLE log list to process_payment so it updates it in place
+            matched = process_payment(users, sender, amount, date, service, existing_logs=logs)
+            if matched:
+                count += 1
+
+    return count
 
 # --- Plex Access Control ---
 def modify_plex_access(user, enable=True):

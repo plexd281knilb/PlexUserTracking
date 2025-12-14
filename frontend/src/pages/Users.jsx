@@ -21,7 +21,8 @@ const Users = () => {
                 apiGet('/payment_logs')
             ]);
             setUsers(uData);
-            setLogs(lData.filter(l => l.status === 'Unmapped'));
+            // SHOW ALL LOGS (Matched & Unmapped) so users can correct mistakes
+            setLogs(lData); 
         } catch (e) { console.error(e); } 
         finally { setLoading(false); }
     };
@@ -48,12 +49,11 @@ const Users = () => {
     const handleBulkUpdate = async (updates) => {
         if (!window.confirm(`Update ${selectedIds.length} users?`)) return;
         try {
-            // This calls the /bulk endpoint we created in the backend
             await apiPut('/users/bulk', { ids: selectedIds, updates }, localStorage.getItem('admin_token'));
-            setSelectedIds([]); // Clear selection
-            fetchData(); // Refresh data
+            setSelectedIds([]); 
+            fetchData(); 
         } catch (e) {
-            alert('Bulk update failed. Ensure backend has /bulk route.');
+            alert('Bulk update failed.');
         }
     };
 
@@ -97,6 +97,19 @@ const Users = () => {
         setLoading(false);
     };
 
+    const handleRemap = async () => {
+        if (!window.confirm("Re-scan all unmapped payments against current users?")) return;
+        setLoading(true);
+        try {
+            const res = await apiPost('/payments/remap', {}, localStorage.getItem('admin_token'));
+            alert(res.message);
+            fetchData();
+        } catch (e) {
+            alert('Remap failed');
+        }
+        setLoading(false);
+    };
+
     const getFreqBadgeColor = (freq) => {
         switch(freq) {
             case 'Exempt': return '#eab308'; // Gold
@@ -109,50 +122,36 @@ const Users = () => {
         <div>
             <div className="flex" style={{justifyContent:'space-between', alignItems:'center'}}>
                 <h1>User Management</h1>
-                <div className="flex">
+                <div className="flex" style={{gap: '10px'}}>
+                    <button className="button" style={{backgroundColor: '#64748b'}} onClick={handleRemap}>
+                        🔄 Re-Map Payments
+                    </button>
                     <button className="button" onClick={() => handleImport('plex')}>Import Plex</button>
                     <button className="button" onClick={() => handleImport('tautulli')}>Import Tautulli</button>
                 </div>
             </div>
 
-            {/* --- BULK ACTION TOOLBAR (Visible only when users are selected) --- */}
+            {/* --- BULK ACTION TOOLBAR --- */}
             {selectedIds.length > 0 && (
                 <div className="card" style={{
                     backgroundColor: '#334155', 
                     padding: '10px 20px', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '15px', 
-                    marginBottom: '20px',
-                    borderLeft: '4px solid #38bdf8'
+                    display: 'flex', alignItems: 'center', gap: '15px', 
+                    marginBottom: '20px', borderLeft: '4px solid #38bdf8'
                 }}>
                     <span style={{fontWeight: 'bold', color: 'white'}}>{selectedIds.length} Selected</span>
-                    
                     <div style={{height: '20px', width: '1px', backgroundColor: '#94a3b8'}}></div>
-                    
                     <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#eab308', color: 'black'}} 
-                        onClick={() => handleBulkUpdate({payment_freq: 'Exempt'})}>
-                        Set Exempt
-                    </button>
+                        onClick={() => handleBulkUpdate({payment_freq: 'Exempt'})}>Set Exempt</button>
                     <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#64748b'}} 
-                        onClick={() => handleBulkUpdate({payment_freq: 'Monthly'})}>
-                        Set Monthly
-                    </button>
+                        onClick={() => handleBulkUpdate({payment_freq: 'Monthly'})}>Set Monthly</button>
                     <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#8b5cf6'}} 
-                        onClick={() => handleBulkUpdate({payment_freq: 'Yearly'})}>
-                        Set Yearly
-                    </button>
-                    
+                        onClick={() => handleBulkUpdate({payment_freq: 'Yearly'})}>Set Yearly</button>
                     <div style={{height: '20px', width: '1px', backgroundColor: '#94a3b8'}}></div>
-                    
                     <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#10b981'}} 
-                        onClick={() => handleBulkUpdate({status: 'Active'})}>
-                        Enable All
-                    </button>
+                        onClick={() => handleBulkUpdate({status: 'Active'})}>Enable All</button>
                     <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#ef4444'}} 
-                        onClick={() => handleBulkUpdate({status: 'Disabled'})}>
-                        Disable All
-                    </button>
+                        onClick={() => handleBulkUpdate({status: 'Disabled'})}>Disable All</button>
                 </div>
             )}
 
@@ -160,14 +159,8 @@ const Users = () => {
                 <table className="table">
                     <thead>
                         <tr>
-                            {/* Select All Checkbox */}
                             <th style={{width: '40px', textAlign: 'center'}}>
-                                <input 
-                                    type="checkbox" 
-                                    onChange={handleSelectAll} 
-                                    checked={users.length > 0 && selectedIds.length === users.length} 
-                                    style={{cursor: 'pointer'}}
-                                />
+                                <input type="checkbox" onChange={handleSelectAll} checked={users.length > 0 && selectedIds.length === users.length} style={{cursor: 'pointer'}} />
                             </th>
                             <th>Username</th>
                             <th>Full Name</th>
@@ -180,14 +173,8 @@ const Users = () => {
                     <tbody>
                         {users.map(u => (
                             <tr key={u.id} style={{backgroundColor: selectedIds.includes(u.id) ? 'rgba(56, 189, 248, 0.1)' : 'transparent'}}>
-                                {/* Row Checkbox */}
                                 <td style={{textAlign: 'center'}}>
-                                    <input 
-                                        type="checkbox" 
-                                        checked={selectedIds.includes(u.id)} 
-                                        onChange={() => handleSelectRow(u.id)}
-                                        style={{cursor: 'pointer'}}
-                                    />
+                                    <input type="checkbox" checked={selectedIds.includes(u.id)} onChange={() => handleSelectRow(u.id)} style={{cursor: 'pointer'}} />
                                 </td>
                                 <td style={{fontWeight:'bold'}}>{u.username}</td>
                                 <td>{u.full_name || '-'}</td>
@@ -195,19 +182,11 @@ const Users = () => {
                                     <span style={{
                                         fontSize:'0.75rem', padding:'2px 6px', borderRadius:'4px',
                                         backgroundColor: getFreqBadgeColor(u.payment_freq),
-                                        color: u.payment_freq === 'Exempt' ? 'black' : 'white',
-                                        fontWeight: 'bold'
-                                    }}>
-                                        {u.payment_freq || 'Exempt'}
-                                    </span>
+                                        color: u.payment_freq === 'Exempt' ? 'black' : 'white', fontWeight: 'bold'
+                                    }}>{u.payment_freq || 'Exempt'}</span>
                                 </td>
                                 <td>
-                                    <span style={{
-                                        color: u.status === 'Active' ? '#10b981' : '#ef4444', 
-                                        fontWeight: 'bold'
-                                    }}>
-                                        {u.status}
-                                    </span>
+                                    <span style={{color: u.status === 'Active' ? '#10b981' : '#ef4444', fontWeight: 'bold'}}>{u.status}</span>
                                 </td>
                                 <td>
                                     {u.last_paid || 'Never'}
@@ -219,14 +198,8 @@ const Users = () => {
                                 </td>
                                 <td>
                                     <div className="flex" style={{gap:'5px'}}>
-                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem'}} 
-                                            onClick={() => setEditUser(u)}>
-                                            Edit
-                                        </button>
-                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: '#f59e0b'}} 
-                                            onClick={() => setMatchUser(u)}>
-                                            Match Pay
-                                        </button>
+                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem'}} onClick={() => setEditUser(u)}>Edit</button>
+                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: '#f59e0b'}} onClick={() => setMatchUser(u)}>Match Pay</button>
                                         <button className="button" 
                                             style={{
                                                 padding:'4px 8px', fontSize:'0.75rem', 
@@ -250,27 +223,12 @@ const Users = () => {
                     <div className="card" style={{minWidth: '400px', margin: 'auto'}}>
                         <h3>Edit User: {editUser.username}</h3>
                         <form onSubmit={handleSaveUser} style={{display:'grid', gap:'15px'}}>
-                            <div>
-                                <label className="small">Full Name</label>
-                                <input className="input" value={editUser.full_name || ''} 
-                                    onChange={e=>setEditUser({...editUser, full_name: e.target.value})} />
-                            </div>
-                            
-                            <div>
-                                <label className="small">AKA / Aliases (Comma separated)</label>
-                                <input className="input" placeholder="e.g. Bobby, Big Bob" value={editUser.aka || ''} 
-                                    onChange={e=>setEditUser({...editUser, aka: e.target.value})} />
-                            </div>
-
-                            <div>
-                                <label className="small">Email</label>
-                                <input className="input" value={editUser.email || ''} 
-                                    onChange={e=>setEditUser({...editUser, email: e.target.value})} />
-                            </div>
+                            <div><label className="small">Full Name</label><input className="input" value={editUser.full_name || ''} onChange={e=>setEditUser({...editUser, full_name: e.target.value})} /></div>
+                            <div><label className="small">AKA / Aliases</label><input className="input" placeholder="e.g. Bobby, Big Bob" value={editUser.aka || ''} onChange={e=>setEditUser({...editUser, aka: e.target.value})} /></div>
+                            <div><label className="small">Email</label><input className="input" value={editUser.email || ''} onChange={e=>setEditUser({...editUser, email: e.target.value})} /></div>
                             <div>
                                 <label className="small">Payment Frequency</label>
-                                <select className="input" value={editUser.payment_freq || 'Exempt'}
-                                    onChange={e=>setEditUser({...editUser, payment_freq: e.target.value})}>
+                                <select className="input" value={editUser.payment_freq || 'Exempt'} onChange={e=>setEditUser({...editUser, payment_freq: e.target.value})}>
                                     <option value="Exempt">Exempt</option>
                                     <option value="Monthly">Monthly</option>
                                     <option value="Yearly">Yearly</option>
@@ -288,30 +246,36 @@ const Users = () => {
             {/* MATCH PAYMENT MODAL */}
             {matchUser && (
                 <div style={modalStyle}>
-                    <div className="card" style={{minWidth: '500px', maxHeight: '80vh', overflowY: 'auto', margin: 'auto'}}>
+                    <div className="card" style={{minWidth: '600px', maxHeight: '80vh', overflowY: 'auto', margin: 'auto'}}>
                         <h3>Match Payment to {matchUser.username}</h3>
-                        <p className="small">Select a recent unmapped transaction below:</p>
+                        <p className="small">Select a transaction below (Matched logs shown dimmed):</p>
                         
                         <table className="table" style={{marginTop:'15px'}}>
                             <thead><tr><th>Date</th><th>Sender</th><th>Amount</th><th>Action</th></tr></thead>
                             <tbody>
                                 {logs.map((log, i) => (
-                                    <tr key={i}>
+                                    <tr key={i} style={{opacity: log.status === 'Matched' ? 0.6 : 1}}>
                                         <td>{log.date}</td>
                                         <td>{log.sender}</td>
                                         <td>{log.amount}</td>
                                         <td>
-                                            <button className="button" style={{padding:'2px 8px', fontSize:'0.7rem'}} 
-                                                onClick={() => handleMatch(log)}>
-                                                Select
-                                            </button>
+                                            {log.status === 'Matched' ? (
+                                                <button className="button" style={{padding:'2px 8px', fontSize:'0.7rem', backgroundColor: '#ef4444'}} 
+                                                    onClick={() => handleMatch(log)}>
+                                                    Re-Link ({log.mapped_user})
+                                                </button>
+                                            ) : (
+                                                <button className="button" style={{padding:'2px 8px', fontSize:'0.7rem'}} 
+                                                    onClick={() => handleMatch(log)}>
+                                                    Select
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}
-                                {logs.length === 0 && <tr><td colSpan="4" style={{textAlign:'center'}}>No unmapped payments found.</td></tr>}
+                                {logs.length === 0 && <tr><td colSpan="4" style={{textAlign:'center'}}>No payments found.</td></tr>}
                             </tbody>
                         </table>
-                        
                         <div style={{marginTop:'20px', textAlign:'right'}}>
                             <button className="button" style={{backgroundColor:'#64748b'}} onClick={()=>setMatchUser(null)}>Cancel</button>
                         </div>
