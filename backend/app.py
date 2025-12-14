@@ -3,10 +3,9 @@ import atexit
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
-# Import the new automation function
 from automation import check_automation
 
-# 1. PATH SETUP
+# 1. PATH SETUP (Find the frontend build folder)
 current_dir = os.getcwd()
 possible_paths = [
     os.path.join(current_dir, '..', 'frontend', 'build'),
@@ -25,7 +24,6 @@ app = Flask(__name__, static_folder=FRONTEND_FOLDER, static_url_path='/')
 CORS(app)
 
 # 2. SETUP SCHEDULER
-# This runs the check_automation function every day at 9:00 AM server time
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=check_automation, trigger="cron", hour=9)
 scheduler.start()
@@ -46,14 +44,22 @@ app.register_blueprint(payments_bp)
 app.register_blueprint(logs_bp)
 app.register_blueprint(expenses_bp)
 
-# 4. SERVE FRONTEND
+# 4. SERVE FRONTEND (THE FIX)
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
+    # A. If it's an API call that failed, return 404 (don't serve HTML)
+    if path.startswith('api/'):
+        return jsonify(error="API endpoint not found"), 404
+
+    # B. If the file actually exists (like favicon.ico or logo.png), serve it
     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
-    else:
-        return send_from_directory(app.static_folder, 'index.html')
+    
+    # C. FOR EVERYTHING ELSE: Serve index.html
+    # This fixes the refresh issue. The browser gets index.html,
+    # and React Router takes over to show the correct page.
+    return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
