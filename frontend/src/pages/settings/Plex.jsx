@@ -60,7 +60,7 @@ export default function Plex() {
             setAvailableLibraries(res.libraries);
             setLibFetchStatus(`Success! Found ${res.libraries.length} libraries.`);
         } catch (e) {
-            setLibFetchStatus('Failed. Try entering the URL manually.');
+            setLibFetchStatus(`Failed: ${e.message}`);
         }
     };
 

@@ -9,7 +9,6 @@ from database import load_servers, load_users, save_users, load_payment_accounts
 
 # --- Helper: Extract Body Text ---
 def get_email_body(msg):
-    """Extracts plain text body from an email message."""
     if msg.is_multipart():
         for part in msg.walk():
             ctype = part.get_content_type()
@@ -20,9 +19,8 @@ def get_email_body(msg):
         return msg.get_payload(decode=True).decode('utf-8', errors='ignore')
     return ""
 
-# --- Payment Processing Logic ---
+# --- Payment Processing Logic (Optimized) ---
 def process_payment(users, sender_name, amount_str, date_obj, service_name, existing_logs=None, save_db=True):
-    # 1. Parse Date
     try:
         if isinstance(date_obj, str):
             date_str = date_obj
@@ -36,20 +34,17 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
     except:
         date_str = datetime.now().strftime('%Y-%m-%d')
 
-    # 2. Get/Create Log Entry
     if existing_logs is None:
         existing_logs = load_payment_logs()
         
     raw_text = f"{sender_name} sent {amount_str}"
     log_entry = None
     
-    # Find existing log
     for log in existing_logs:
         if log.get('raw_text') == raw_text and log.get('date') == date_str:
             log_entry = log
             break
     
-    # Create if new
     if not log_entry:
         log_entry = {
             "date": date_str,
@@ -62,7 +57,6 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
         }
         existing_logs.insert(0, log_entry)
 
-    # 3. MATCHING LOGIC
     match_found = False
     sender_clean = sender_name.lower().strip()
     
@@ -71,14 +65,9 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
         full_name = user.get('full_name', '').lower().strip()
         aka_list = [x.strip().lower() for x in user.get('aka', '').split(',') if x.strip()]
 
-        # Check 1: Username
         if username and username == sender_clean: match_found = True
-        
-        # Check 2: Full Name (contains)
         if not match_found and full_name and len(full_name) > 3:
             if full_name in sender_clean or sender_clean in full_name: match_found = True
-
-        # Check 3: AKA
         if not match_found and aka_list:
             for alias in aka_list:
                 if alias == sender_clean or (len(alias) > 3 and alias in sender_clean):
@@ -86,73 +75,45 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
                     break
 
         if match_found:
-            # Update User if this payment is newer or same date
             user['last_paid'] = date_str
             user['last_payment_amount'] = amount_str
             user['status'] = 'Active'
-            
             log_entry['status'] = "Matched"
             log_entry['mapped_user'] = user['username']
-            
-            if save_db: 
-                print(f"MATCH: {user['username']} -> {sender_name} (${amount_str})")
+            if save_db: print(f"MATCH: {user['username']} -> {sender_name} (${amount_str})")
             break
     
-    # 4. Save (Only if requested - optimization for bulk operations)
     if save_db:
         save_data('payment_logs.json', existing_logs)
         save_users(users)
         
     return match_found
 
-# --- Remap Function ---
 def remap_existing_payments():
-    """
-    Re-runs matching on all logs.
-    Saves only ONCE at the end for speed.
-    """
     print("Starting Bulk Remap...")
     users = load_users()
     logs = load_payment_logs()
     count = 0
-    
     for log in logs:
-        # Pass save_db=False to prevent disk writes on every loop
-        matched = process_payment(
-            users, 
-            log['sender'], 
-            log['amount'], 
-            log['date'], 
-            log['service'], 
-            existing_logs=logs, 
-            save_db=False # <--- CRITICAL OPTIMIZATION
-        )
-        if matched:
-            count += 1
-
-    # Save once at the end
+        matched = process_payment(users, log['sender'], log['amount'], log['date'], log['service'], existing_logs=logs, save_db=False)
+        if matched: count += 1
     save_data('payment_logs.json', logs)
     save_users(users)
     print(f"Remap Complete. Matches found: {count}")
     return count
 
-# --- Plex Access Control ---
+# --- Plex Logic ---
 def modify_plex_access(user, enable=True):
-    # SAFETY CHECK: Never disable an Exempt user
     if not enable and user.get('payment_freq') == 'Exempt':
-        print(f"SAFETY: Skipping disable for exempt user {user.get('username')}")
         return [f"Skipped {user.get('username')}: User is Exempt"]
 
     servers = load_servers()['plex']
     results = []
-
     for server in servers:
-        token = server['token']
-        headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
+        headers = {'X-Plex-Token': server['token'], 'Accept': 'application/json'}
         try:
             r = requests.get('https://plex.tv/api/users', headers=headers)
             if r.status_code != 200: continue
-
             root = ET.fromstring(r.content)
             plex_user_id = None
             for u in root.findall('User'):
@@ -162,89 +123,89 @@ def modify_plex_access(user, enable=True):
                     break
             
             if not plex_user_id: continue
-
             if not enable:
                 requests.delete(f"https://plex.tv/api/friends/{plex_user_id}", headers=headers)
                 results.append(f"{server['name']}: Access Revoked")
             else:
                 results.append(f"{server['name']}: Please manually re-share libraries")
-
         except Exception as e:
             results.append(f"{server['name']}: Error {str(e)}")
-
     return results
 
-# --- NEW: Get Plex Libraries ---
-# ... (Keep imports at the top) ...
-
-# --- ROBUST LIBRARY FETCHER (Try All IPs) ---
-# ... (imports) ...
-
+# --- BULLETPROOF LIBRARY FETCHER ---
 def get_plex_libraries(token, manual_url=None):
     headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
     
-    # 1. Try Manual URL if provided
+    # 1. Try Manual URL (Auto-Corrects Schema)
     if manual_url:
-        print(f"DEBUG: Trying Manual URL: {manual_url}")
-        try:
-            # Ensure no trailing slash
-            clean_url = manual_url.rstrip('/')
-            lib_res = requests.get(f"{clean_url}/library/sections", headers=headers, timeout=5, verify=False)
-            if lib_res.status_code == 200:
-                lib_root = ET.fromstring(lib_res.content)
-                libraries = []
-                for directory in lib_root.findall('Directory'):
-                    libraries.append({
-                        "id": directory.get('key'),
-                        "title": directory.get('title'),
-                        "type": directory.get('type')
-                    })
-                return {"status": "success", "libraries": libraries, "server_name": "Manual Server"}
-            else:
-                print(f"Manual URL failed: {lib_res.status_code}")
-        except Exception as e:
-            print(f"Manual URL Error: {e}")
+        print(f"DEBUG: Testing Manual URL: {manual_url}")
+        
+        # Clean URL
+        clean_url = manual_url.strip().rstrip('/')
+        
+        # Determine URLs to try (HTTP and HTTPS)
+        urls_to_try = []
+        if clean_url.startswith('http'):
+            urls_to_try.append(clean_url)
+            # If user tried http, auto-try https fallback
+            if clean_url.startswith('http://'):
+                urls_to_try.append(clean_url.replace('http://', 'https://'))
+        else:
+            # User typed just IP (192.168.1.5:32400) -> Try both
+            urls_to_try.append(f"http://{clean_url}")
+            urls_to_try.append(f"https://{clean_url}")
 
-    # 2. Auto-Discovery (Fallback)
+        last_error = ""
+        for url in urls_to_try:
+            try:
+                print(f"DEBUG: Attempting {url}...")
+                lib_res = requests.get(f"{url}/library/sections", headers=headers, timeout=5, verify=False)
+                
+                if lib_res.status_code == 200:
+                    lib_root = ET.fromstring(lib_res.content)
+                    libraries = [{"id": d.get('key'), "title": d.get('title'), "type": d.get('type')} for d in lib_root.findall('Directory')]
+                    return {"status": "success", "libraries": libraries, "server_name": "Manual Server"}
+                elif lib_res.status_code == 401:
+                    last_error = "401 Unauthorized. Token may be invalid."
+                else:
+                    last_error = f"Server returned {lib_res.status_code}"
+            except Exception as e:
+                last_error = str(e)
+        
+        return {"error": f"Manual Connection Failed: {last_error}"}
+
+    # 2. Auto-Discovery
     try:
         res = requests.get('https://plex.tv/api/resources?includeHttps=1', headers=headers, timeout=5)
         if res.status_code != 200: return {"error": "Failed to connect to Plex.tv"}
         
         root = ET.fromstring(res.content)
-        target_server = None
+        server_device = None
         
         for device in root.findall('Device'):
             if device.get('product') == 'Plex Media Server':
-                target_server = device
+                server_device = device
                 if device.get('presence') == '1': break
         
-        if not target_server: return {"error": "No Plex Media Server found"}
+        if not server_device: return {"error": "No Plex Media Server found on account"}
 
-        server_name = target_server.get('name')
-        
-        # Collect all URIs
-        uris = []
-        for conn in target_server.findall('Connection'):
-            if conn.get('uri'): uris.append(conn.get('uri'))
-            
-        # Try them all
-        for url in uris:
+        # Try every connection listed
+        connections = server_device.findall('Connection')
+        for conn in connections:
+            uri = conn.get('uri')
+            if not uri: continue
             try:
-                print(f"Testing {url}...")
-                test = requests.get(f"{url}/library/sections", headers=headers, timeout=2, verify=False)
+                print(f"DEBUG: Auto-discovery trying {uri}")
+                test = requests.get(f"{uri}/library/sections", headers=headers, timeout=2, verify=False)
                 if test.status_code == 200:
                     lib_root = ET.fromstring(test.content)
                     libraries = [{"id": d.get('key'), "title": d.get('title'), "type": d.get('type')} for d in lib_root.findall('Directory')]
-                    return {"status": "success", "libraries": libraries, "server_name": server_name}
+                    return {"status": "success", "libraries": libraries, "server_name": server_device.get('name')}
             except: continue
 
-        return {"error": "Could not reach server on any discovered IP. Please use Manual URL."}
+        return {"error": "Could not reach server on any discovered IP. Please use the Manual URL field."}
 
     except Exception as e: return {"error": str(e)}
-
-# ... (Keep the rest of the file) ...
-
-# ... (Keep the rest of the file: fetch_venmo, process_payment, etc.) ...
 
 # --- Fetchers ---
 def fetch_venmo_payments():
