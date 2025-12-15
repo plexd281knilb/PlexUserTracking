@@ -45,21 +45,27 @@ def test_tautulli():
     return jsonify(test_tautulli_connection(url, key))
 
 # --- NEW ROUTE ---
+# ... (imports) ...
+
 @settings_bp.route('/plex/libraries', methods=['POST'])
 def fetch_libraries():
-    """Fetches libraries using a provided token"""
     token = request.json.get('token')
+    manual_url = request.json.get('url') # <--- Get URL from request
     
-    # If no token provided in request, try to find a saved one
     if not token:
         servers = load_servers().get('plex', [])
         if servers:
             token = servers[0]['token']
+            # If the saved server has a URL, use it
+            if not manual_url and 'url' in servers[0]:
+                manual_url = servers[0]['url']
         else:
-            return jsonify({'error': 'No token provided and no servers saved'}), 400
+            return jsonify({'error': 'No token provided'}), 400
 
-    result = get_plex_libraries(token)
+    result = get_plex_libraries(token, manual_url) # <--- Pass it here
     if 'error' in result:
         return jsonify(result), 500
     
     return jsonify(result)
+
+# ... (Rest of file) ...

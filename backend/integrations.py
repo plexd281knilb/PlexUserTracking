@@ -175,38 +175,76 @@ def modify_plex_access(user, enable=True):
     return results
 
 # --- NEW: Get Plex Libraries ---
-def get_plex_libraries(token):
+# ... (Keep imports at the top) ...
+
+# --- ROBUST LIBRARY FETCHER (Try All IPs) ---
+# ... (imports) ...
+
+def get_plex_libraries(token, manual_url=None):
     headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
+    
+    # 1. Try Manual URL if provided
+    if manual_url:
+        print(f"DEBUG: Trying Manual URL: {manual_url}")
+        try:
+            # Ensure no trailing slash
+            clean_url = manual_url.rstrip('/')
+            lib_res = requests.get(f"{clean_url}/library/sections", headers=headers, timeout=5, verify=False)
+            if lib_res.status_code == 200:
+                lib_root = ET.fromstring(lib_res.content)
+                libraries = []
+                for directory in lib_root.findall('Directory'):
+                    libraries.append({
+                        "id": directory.get('key'),
+                        "title": directory.get('title'),
+                        "type": directory.get('type')
+                    })
+                return {"status": "success", "libraries": libraries, "server_name": "Manual Server"}
+            else:
+                print(f"Manual URL failed: {lib_res.status_code}")
+        except Exception as e:
+            print(f"Manual URL Error: {e}")
+
+    # 2. Auto-Discovery (Fallback)
     try:
         res = requests.get('https://plex.tv/api/resources?includeHttps=1', headers=headers, timeout=5)
-        if res.status_code != 200: return {"error": "Failed to connect to Plex"}
+        if res.status_code != 200: return {"error": "Failed to connect to Plex.tv"}
         
         root = ET.fromstring(res.content)
-        server_device = None
-        connection_uri = None
-
+        target_server = None
+        
         for device in root.findall('Device'):
             if device.get('product') == 'Plex Media Server':
-                if device.get('presence') == '1':
-                    server_device = device
-                    break
+                target_server = device
+                if device.get('presence') == '1': break
         
-        if not server_device: return {"error": "No Plex Media Server found"}
+        if not target_server: return {"error": "No Plex Media Server found"}
 
-        for conn in server_device.findall('Connection'):
-            if conn.get('local') == '1': connection_uri = conn.get('uri'); break
+        server_name = target_server.get('name')
         
-        if not connection_uri:
-             if len(server_device.findall('Connection')) > 0:
-                 connection_uri = server_device.findall('Connection')[0].get('uri')
+        # Collect all URIs
+        uris = []
+        for conn in target_server.findall('Connection'):
+            if conn.get('uri'): uris.append(conn.get('uri'))
+            
+        # Try them all
+        for url in uris:
+            try:
+                print(f"Testing {url}...")
+                test = requests.get(f"{url}/library/sections", headers=headers, timeout=2, verify=False)
+                if test.status_code == 200:
+                    lib_root = ET.fromstring(test.content)
+                    libraries = [{"id": d.get('key'), "title": d.get('title'), "type": d.get('type')} for d in lib_root.findall('Directory')]
+                    return {"status": "success", "libraries": libraries, "server_name": server_name}
+            except: continue
 
-        if not connection_uri: return {"error": "No reachable server found"}
-        
-        lib_res = requests.get(f"{connection_uri}/library/sections", headers=headers, timeout=5, verify=False)
-        lib_root = ET.fromstring(lib_res.content)
-        libraries = [{"id": d.get('key'), "title": d.get('title'), "type": d.get('type')} for d in lib_root.findall('Directory')]
-        return {"status": "success", "libraries": libraries, "server_name": server_device.get('name')}
+        return {"error": "Could not reach server on any discovered IP. Please use Manual URL."}
+
     except Exception as e: return {"error": str(e)}
+
+# ... (Keep the rest of the file) ...
+
+# ... (Keep the rest of the file: fetch_venmo, process_payment, etc.) ...
 
 # --- Fetchers ---
 def fetch_venmo_payments():
