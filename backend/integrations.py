@@ -19,7 +19,7 @@ def get_email_body(msg):
         return msg.get_payload(decode=True).decode('utf-8', errors='ignore')
     return ""
 
-# --- Payment Processing Logic (Optimized) ---
+# --- Payment Processing Logic ---
 def process_payment(users, sender_name, amount_str, date_obj, service_name, existing_logs=None, save_db=True):
     try:
         if isinstance(date_obj, str):
@@ -102,7 +102,7 @@ def remap_existing_payments():
     print(f"Remap Complete. Matches found: {count}")
     return count
 
-# --- Plex Logic ---
+# --- Plex Access Control ---
 def modify_plex_access(user, enable=True):
     if not enable and user.get('payment_freq') == 'Exempt':
         return [f"Skipped {user.get('username')}: User is Exempt"]
@@ -114,7 +114,14 @@ def modify_plex_access(user, enable=True):
         try:
             r = requests.get('https://plex.tv/api/users', headers=headers)
             if r.status_code != 200: continue
-            root = ET.fromstring(r.content)
+            
+            # Plex.tv API returns XML by default unless strict headers are set, 
+            # but usually we handle XML for the users endpoint.
+            try:
+                root = ET.fromstring(r.content)
+            except:
+                continue # Skip if cant parse
+
             plex_user_id = None
             for u in root.findall('User'):
                 if u.get('email', '').lower() == user['email'].lower() or \
@@ -132,78 +139,90 @@ def modify_plex_access(user, enable=True):
             results.append(f"{server['name']}: Error {str(e)}")
     return results
 
-# --- BULLETPROOF LIBRARY FETCHER ---
+# --- FIXED: Library Fetcher (JSON Support) ---
 def get_plex_libraries(token, manual_url=None):
     headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
     
-    # 1. Try Manual URL (Auto-Corrects Schema)
-    if manual_url:
-        print(f"DEBUG: Testing Manual URL: {manual_url}")
-        
-        # Clean URL
-        clean_url = manual_url.strip().rstrip('/')
-        
-        # Determine URLs to try (HTTP and HTTPS)
-        urls_to_try = []
-        if clean_url.startswith('http'):
-            urls_to_try.append(clean_url)
-            # If user tried http, auto-try https fallback
-            if clean_url.startswith('http://'):
-                urls_to_try.append(clean_url.replace('http://', 'https://'))
-        else:
-            # User typed just IP (192.168.1.5:32400) -> Try both
-            urls_to_try.append(f"http://{clean_url}")
-            urls_to_try.append(f"https://{clean_url}")
-
-        last_error = ""
-        for url in urls_to_try:
+    # Helper to parse response (Handles JSON or XML)
+    def parse_libraries(response, server_name="Unknown"):
+        libraries = []
+        try:
+            # TRY JSON FIRST (Since we asked for it)
+            data = response.json()
+            # Structure: { MediaContainer: { Directory: [...] } }
+            directories = data.get('MediaContainer', {}).get('Directory', [])
+            for d in directories:
+                libraries.append({
+                    "id": d.get('key'),
+                    "title": d.get('title'),
+                    "type": d.get('type')
+                })
+            return {"status": "success", "libraries": libraries, "server_name": server_name}
+        except ValueError:
+            # FALLBACK TO XML
             try:
-                print(f"DEBUG: Attempting {url}...")
-                lib_res = requests.get(f"{url}/library/sections", headers=headers, timeout=5, verify=False)
-                
-                if lib_res.status_code == 200:
-                    lib_root = ET.fromstring(lib_res.content)
-                    libraries = [{"id": d.get('key'), "title": d.get('title'), "type": d.get('type')} for d in lib_root.findall('Directory')]
-                    return {"status": "success", "libraries": libraries, "server_name": "Manual Server"}
-                elif lib_res.status_code == 401:
-                    last_error = "401 Unauthorized. Token may be invalid."
-                else:
-                    last_error = f"Server returned {lib_res.status_code}"
+                root = ET.fromstring(response.content)
+                for directory in root.findall('Directory'):
+                    libraries.append({
+                        "id": directory.get('key'),
+                        "title": directory.get('title'),
+                        "type": directory.get('type')
+                    })
+                return {"status": "success", "libraries": libraries, "server_name": server_name}
+            except Exception as e:
+                return {"error": f"Parsing Failed: {str(e)} - Content: {response.text[:50]}"}
+
+    # 1. Try Manual URL
+    if manual_url:
+        clean_url = manual_url.strip().rstrip('/')
+        urls = [clean_url]
+        if not clean_url.startswith('http'):
+            urls = [f"http://{clean_url}", f"https://{clean_url}"]
+            
+        last_error = ""
+        for url in urls:
+            try:
+                print(f"DEBUG: Manual connection to {url}")
+                res = requests.get(f"{url}/library/sections", headers=headers, timeout=5, verify=False)
+                if res.status_code == 200:
+                    return parse_libraries(res, "Manual Server")
+                last_error = f"Status {res.status_code}"
             except Exception as e:
                 last_error = str(e)
-        
         return {"error": f"Manual Connection Failed: {last_error}"}
 
     # 2. Auto-Discovery
     try:
+        # Get Resources (XML is standard for plex.tv resources)
         res = requests.get('https://plex.tv/api/resources?includeHttps=1', headers=headers, timeout=5)
         if res.status_code != 200: return {"error": "Failed to connect to Plex.tv"}
         
         root = ET.fromstring(res.content)
-        server_device = None
-        
+        target_server = None
         for device in root.findall('Device'):
             if device.get('product') == 'Plex Media Server':
-                server_device = device
+                target_server = device
                 if device.get('presence') == '1': break
         
-        if not server_device: return {"error": "No Plex Media Server found on account"}
+        if not target_server: return {"error": "No Plex Media Server found"}
 
-        # Try every connection listed
-        connections = server_device.findall('Connection')
-        for conn in connections:
-            uri = conn.get('uri')
-            if not uri: continue
+        server_name = target_server.get('name')
+        
+        # Collect URIs
+        uris = []
+        for conn in target_server.findall('Connection'):
+            if conn.get('uri'): uris.append(conn.get('uri'))
+            
+        # Try URIs
+        for url in uris:
             try:
-                print(f"DEBUG: Auto-discovery trying {uri}")
-                test = requests.get(f"{uri}/library/sections", headers=headers, timeout=2, verify=False)
+                print(f"DEBUG: Auto-testing {url}")
+                test = requests.get(f"{url}/library/sections", headers=headers, timeout=2, verify=False)
                 if test.status_code == 200:
-                    lib_root = ET.fromstring(test.content)
-                    libraries = [{"id": d.get('key'), "title": d.get('title'), "type": d.get('type')} for d in lib_root.findall('Directory')]
-                    return {"status": "success", "libraries": libraries, "server_name": server_device.get('name')}
+                    return parse_libraries(test, server_name)
             except: continue
 
-        return {"error": "Could not reach server on any discovered IP. Please use the Manual URL field."}
+        return {"error": "Could not reach server on any discovered IP. Try Manual URL."}
 
     except Exception as e: return {"error": str(e)}
 
