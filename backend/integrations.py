@@ -102,26 +102,58 @@ def remap_existing_payments():
     print(f"Remap Complete. Matches found: {count}")
     return count
 
-# --- Plex Access Control ---
+# --- PLEX LOGIC (Updated to use Settings) ---
 def modify_plex_access(user, enable=True):
+    settings = load_settings()
+    
+    # 1. Exempt Check
     if not enable and user.get('payment_freq') == 'Exempt':
         return [f"Skipped {user.get('username')}: User is Exempt"]
 
+    # 2. Settings Check
+    auto_ban = settings.get('plex_auto_ban', True)
+    auto_invite = settings.get('plex_auto_invite', True)
+    library_ids = settings.get('default_library_ids', [])
+
+    if not enable and not auto_ban:
+        return ["Skipped: Auto-Ban is disabled in settings"]
+    
+    if enable and not auto_invite:
+        return ["Skipped: Auto-Invite is disabled in settings"]
+
     servers = load_servers()['plex']
     results = []
-    for server in servers:
-        headers = {'X-Plex-Token': server['token'], 'Accept': 'application/json'}
-        try:
-            r = requests.get('https://plex.tv/api/users', headers=headers)
-            if r.status_code != 200: continue
-            
-            # Plex.tv API returns XML by default unless strict headers are set, 
-            # but usually we handle XML for the users endpoint.
-            try:
-                root = ET.fromstring(r.content)
-            except:
-                continue # Skip if cant parse
 
+    for server in servers:
+        token = server['token']
+        headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
+        
+        try:
+            # A. Get Server Machine ID (Required for sharing)
+            # We fetch resources to map our token to a specific MachineIdentifier
+            res = requests.get('https://plex.tv/api/resources?includeHttps=1', headers=headers, timeout=5)
+            machine_id = None
+            if res.status_code == 200:
+                root = ET.fromstring(res.content)
+                for device in root.findall('Device'):
+                    if device.get('product') == 'Plex Media Server':
+                        # Match by name if possible, otherwise take first
+                        if device.get('name') == server['name']:
+                            machine_id = device.get('clientIdentifier')
+                            break
+                        if not machine_id: machine_id = device.get('clientIdentifier') # Fallback
+
+            if not machine_id:
+                results.append(f"{server['name']}: Could not find Machine ID")
+                continue
+
+            # B. Find User ID
+            r = requests.get('https://plex.tv/api/users', headers=headers)
+            if r.status_code != 200: 
+                results.append(f"{server['name']}: Failed to fetch user list")
+                continue
+
+            root = ET.fromstring(r.content)
             plex_user_id = None
             for u in root.findall('User'):
                 if u.get('email', '').lower() == user['email'].lower() or \
@@ -129,27 +161,71 @@ def modify_plex_access(user, enable=True):
                     plex_user_id = u.get('id')
                     break
             
-            if not plex_user_id: continue
+            # C. Perform Action
             if not enable:
-                requests.delete(f"https://plex.tv/api/friends/{plex_user_id}", headers=headers)
-                results.append(f"{server['name']}: Access Revoked")
+                # DISABLE (DELETE FRIEND)
+                if plex_user_id:
+                    requests.delete(f"https://plex.tv/api/friends/{plex_user_id}", headers=headers)
+                    results.append(f"{server['name']}: Access Revoked")
+                else:
+                    results.append(f"{server['name']}: User not found (Already removed?)")
+
             else:
-                results.append(f"{server['name']}: Please manually re-share libraries")
+                # ENABLE (UPDATE/ADD SHARE)
+                if not plex_user_id:
+                    # User must exist as a friend or pending invite to update shares easily.
+                    # Full invite flow is complex (requires sending email).
+                    # For now, we only update existing friends/users found in the list.
+                    results.append(f"{server['name']}: User not found on friend list. Please invite via email first.")
+                    continue
+
+                # Construct Share URL
+                # PUT https://plex.tv/api/servers/{machineIdentifier}/shared_servers/{plex_user_id}?sections={ids}
+                # Note: This updates an existing share.
+                
+                # If library_ids is empty, we share nothing (effectively disabling, but keeping friend)
+                # or we just skip. Let's try to share what is selected.
+                sections_str = ",".join([str(lid) for lid in library_ids])
+                
+                # We need to find the specific 'SharedServer' ID for this user on this machine
+                # The user list XML contains <Server id="123" serverId="machineID" /> children under the User.
+                
+                # This is tricky via the standard API. A simpler method often used is:
+                # POST https://plex.tv/api/servers/{machineIdentifier}/shared_servers
+                # Payload: { server_id: machine_id, shared_server: { library_section_ids: [...], invited_email: ... } }
+                
+                json_payload = {
+                    "server_id": machine_id,
+                    "shared_server": {
+                        "library_section_ids": library_ids,
+                        "invited_email": user['email']
+                    }
+                }
+                
+                invite_res = requests.post(
+                    f"https://plex.tv/api/servers/{machine_id}/shared_servers", 
+                    headers={'X-Plex-Token': token, 'Content-Type': 'application/json', 'Accept': 'application/json'},
+                    json=json_payload
+                )
+                
+                if invite_res.status_code in [200, 201]:
+                    results.append(f"{server['name']}: Access Granted (Libraries updated)")
+                else:
+                    results.append(f"{server['name']}: Share Update Failed ({invite_res.status_code})")
+
         except Exception as e:
             results.append(f"{server['name']}: Error {str(e)}")
+
     return results
 
-# --- FIXED: Library Fetcher (JSON Support) ---
+# --- Library Fetcher (Keep the working JSON version) ---
 def get_plex_libraries(token, manual_url=None):
     headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
     
-    # Helper to parse response (Handles JSON or XML)
     def parse_libraries(response, server_name="Unknown"):
         libraries = []
         try:
-            # TRY JSON FIRST (Since we asked for it)
             data = response.json()
-            # Structure: { MediaContainer: { Directory: [...] } }
             directories = data.get('MediaContainer', {}).get('Directory', [])
             for d in directories:
                 libraries.append({
@@ -159,7 +235,6 @@ def get_plex_libraries(token, manual_url=None):
                 })
             return {"status": "success", "libraries": libraries, "server_name": server_name}
         except ValueError:
-            # FALLBACK TO XML
             try:
                 root = ET.fromstring(response.content)
                 for directory in root.findall('Directory'):
@@ -172,7 +247,6 @@ def get_plex_libraries(token, manual_url=None):
             except Exception as e:
                 return {"error": f"Parsing Failed: {str(e)} - Content: {response.text[:50]}"}
 
-    # 1. Try Manual URL
     if manual_url:
         clean_url = manual_url.strip().rstrip('/')
         urls = [clean_url]
@@ -191,29 +265,24 @@ def get_plex_libraries(token, manual_url=None):
                 last_error = str(e)
         return {"error": f"Manual Connection Failed: {last_error}"}
 
-    # 2. Auto-Discovery
     try:
-        # Get Resources (XML is standard for plex.tv resources)
         res = requests.get('https://plex.tv/api/resources?includeHttps=1', headers=headers, timeout=5)
         if res.status_code != 200: return {"error": "Failed to connect to Plex.tv"}
         
         root = ET.fromstring(res.content)
-        target_server = None
+        server_device = None
         for device in root.findall('Device'):
             if device.get('product') == 'Plex Media Server':
-                target_server = device
+                server_device = device
                 if device.get('presence') == '1': break
         
-        if not target_server: return {"error": "No Plex Media Server found"}
+        if not server_device: return {"error": "No Plex Media Server found"}
 
-        server_name = target_server.get('name')
-        
-        # Collect URIs
+        server_name = server_device.get('name')
         uris = []
-        for conn in target_server.findall('Connection'):
+        for conn in server_device.findall('Connection'):
             if conn.get('uri'): uris.append(conn.get('uri'))
             
-        # Try URIs
         for url in uris:
             try:
                 print(f"DEBUG: Auto-testing {url}")
