@@ -1,11 +1,17 @@
 ﻿import React, { useState, useEffect } from "react";
-import { apiGet, apiPost, apiDelete } from "api";
+import { apiGet, apiPost, apiPut, apiDelete } from "api";
 
 export default function Plex() {
     const [servers, setServers] = useState([]);
-    const [newServer, setNewServer] = useState({ name: '', token: '', url: '' });
-    const [testStatus, setTestStatus] = useState(null);
     
+    // Form State
+    const [formState, setFormState] = useState({ id: null, name: '', token: '', url: '' });
+    const [isEditing, setIsEditing] = useState(false);
+    const [testStatus, setTestStatus] = useState(null); // For the main form test
+    
+    // Inline Test Results: { 1: "OK", 2: "Fail" }
+    const [rowTestResults, setRowTestResults] = useState({});
+
     // Library State
     const [libraryIds, setLibraryIds] = useState([]);
     const [availableLibraries, setAvailableLibraries] = useState([]);
@@ -26,28 +32,66 @@ export default function Plex() {
         fetchSettings();
     }, []);
 
-    const testConnection = async () => {
+    // --- ACTIONS ---
+
+    const handleTestRow = async (server) => {
+        setRowTestResults(prev => ({ ...prev, [server.id]: 'Testing...' }));
+        try {
+            // We use the same backend endpoint but pass this server's specific token
+            const res = await apiPost("/settings/test/plex", { token: server.token });
+            if (res.status === 'success') {
+                setRowTestResults(prev => ({ ...prev, [server.id]: '✅ OK' }));
+            } else {
+                setRowTestResults(prev => ({ ...prev, [server.id]: '❌ Fail' }));
+            }
+        } catch (e) {
+            setRowTestResults(prev => ({ ...prev, [server.id]: '❌ Error' }));
+        }
+    };
+
+    const handleEditRow = (server) => {
+        setFormState(server);
+        setIsEditing(true);
+        setTestStatus(null);
+        // Scroll to form
+        document.getElementById('server-form').scrollIntoView({ behavior: 'smooth' });
+    };
+
+    const handleCancelEdit = () => {
+        setFormState({ id: null, name: '', token: '', url: '' });
+        setIsEditing(false);
+        setTestStatus(null);
+    };
+
+    const handleSaveServer = async () => {
+        if (isEditing) {
+            await apiPut(`/settings/servers/plex/${formState.id}`, formState, localStorage.getItem('admin_token'));
+        } else {
+            await apiPost("/settings/servers/plex", formState, localStorage.getItem('admin_token'));
+        }
+        handleCancelEdit();
+        fetchServers();
+    };
+
+    const handleRemove = (id) => {
+        if(!window.confirm("Remove this server?")) return;
+        apiDelete(`/settings/servers/plex/${id}`, localStorage.getItem('admin_token')).then(fetchServers);
+    };
+
+    const testFormToken = async () => {
         setTestStatus("Testing...");
         try {
-            const res = await apiPost("/settings/test/plex", { token: newServer.token });
+            const res = await apiPost("/settings/test/plex", { token: formState.token });
             setTestStatus(res.message);
         } catch (e) { setTestStatus("Connection Failed"); }
     };
 
-    const addServer = async () => {
-        await apiPost("/settings/servers/plex", newServer, localStorage.getItem('admin_token'));
-        setNewServer({ name: '', token: '', url: '' });
-        setTestStatus(null);
-        fetchServers();
-    };
-
-    // --- UPDATED: FETCH FROM ALL SERVERS ---
+    // --- LIBRARY FETCHING (Unchanged) ---
     const handleFetchLibraries = async () => {
         setLibFetchStatus('Starting scan...');
         let allLibs = [];
         let errors = [];
 
-        // 1. Fetch from Saved Servers
         for (const server of servers) {
             try {
                 setLibFetchStatus(`Scanning ${server.name}...`);
@@ -56,44 +100,19 @@ export default function Plex() {
                     url: server.url 
                 }, localStorage.getItem('admin_token'));
                 
-                // Tag libraries with Server Name
                 const taggedLibs = res.libraries.map(lib => ({
                     ...lib,
                     server_name: server.name,
-                    unique_key: `${server.name}-${lib.id}` // Unique key for React list
+                    unique_key: `${server.name}-${lib.id}`
                 }));
                 allLibs = [...allLibs, ...taggedLibs];
             } catch (e) {
-                console.error(e);
                 errors.push(`${server.name}: Failed`);
             }
         }
-
-        // 2. Fetch from New Input (if typed)
-        if (newServer.token) {
-            try {
-                setLibFetchStatus(`Scanning New Server...`);
-                const res = await apiPost("/settings/plex/libraries", { 
-                    token: newServer.token,
-                    url: newServer.url
-                }, localStorage.getItem('admin_token'));
-                
-                const taggedLibs = res.libraries.map(lib => ({
-                    ...lib,
-                    server_name: "New Server",
-                    unique_key: `New-${lib.id}`
-                }));
-                allLibs = [...allLibs, ...taggedLibs];
-            } catch (e) {}
-        }
-
         setAvailableLibraries(allLibs);
-        
-        if (allLibs.length > 0) {
-            setLibFetchStatus(`Success! Found ${allLibs.length} libraries across ${servers.length} servers.`);
-        } else {
-            setLibFetchStatus(`Failed. ${errors.join(', ')}`);
-        }
+        if (allLibs.length > 0) setLibFetchStatus(`Success! Found ${allLibs.length} libraries.`);
+        else setLibFetchStatus(`Failed. ${errors.join(', ')}`);
     };
 
     const toggleLibrary = (id) => {
@@ -110,17 +129,39 @@ export default function Plex() {
             </div>
 
             <table className="table" style={{ marginBottom: '30px' }}>
-                <thead><tr><th>Name</th><th>URL</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Name</th><th>URL</th><th style={{width: '250px'}}>Actions</th></tr></thead>
                 <tbody>
                     {servers.map(s => (
-                        <tr key={s.id}>
-                            <td>{s.name}</td>
-                            <td className="small">{s.url || 'Auto-Discover'}</td>
+                        <tr key={s.id} style={{backgroundColor: isEditing && formState.id === s.id ? 'rgba(56, 189, 248, 0.1)' : 'transparent'}}>
+                            <td style={{fontWeight: isEditing && formState.id === s.id ? 'bold' : 'normal'}}>{s.name}</td>
+                            <td className="small" style={{color:'var(--text-muted)'}}>{s.url || 'Auto'}</td>
                             <td>
-                                <button className="button" style={{ backgroundColor: 'var(--danger)', padding: '5px 10px' }}
-                                    onClick={() => { apiDelete(`/settings/servers/plex/${s.id}`, localStorage.getItem('admin_token')).then(fetchServers) }}>
-                                    Remove
-                                </button>
+                                <div className="flex" style={{ gap: '5px', alignItems: 'center' }}>
+                                    {/* TEST BUTTON */}
+                                    <button className="button" style={{ padding: '4px 8px', fontSize: '0.7rem', backgroundColor: '#64748b' }}
+                                        onClick={() => handleTestRow(s)}>
+                                        Test
+                                    </button>
+                                    
+                                    {/* EDIT BUTTON */}
+                                    <button className="button" style={{ padding: '4px 8px', fontSize: '0.7rem' }}
+                                        onClick={() => handleEditRow(s)}>
+                                        Edit
+                                    </button>
+
+                                    {/* REMOVE BUTTON */}
+                                    <button className="button" style={{ padding: '4px 8px', fontSize: '0.7rem', backgroundColor: 'var(--danger)' }}
+                                        onClick={() => handleRemove(s.id)}>
+                                        Remove
+                                    </button>
+
+                                    {/* Test Result Indicator */}
+                                    {rowTestResults[s.id] && (
+                                        <span className="small" style={{ marginLeft: '5px', fontWeight:'bold' }}>
+                                            {rowTestResults[s.id]}
+                                        </span>
+                                    )}
+                                </div>
                             </td>
                         </tr>
                     ))}
@@ -128,30 +169,57 @@ export default function Plex() {
                 </tbody>
             </table>
 
-            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '20px' }}>
-                <h4>Add New Connection</h4>
+            {/* FORM SECTION */}
+            <div id="server-form" style={{ borderTop: '1px solid var(--border)', paddingTop: '20px', transition: 'all 0.3s' }}>
+                <h4 style={{color: isEditing ? '#38bdf8' : 'white'}}>
+                    {isEditing ? `Edit Server: ${formState.name}` : 'Add New Connection'}
+                </h4>
+                
                 <div className="flex" style={{ gap: '10px', alignItems: 'flex-end', flexWrap:'wrap' }}>
                     <div style={{ flex: 1, minWidth:'150px' }}>
                         <label className="small">Server Name</label>
-                        <input className="input" placeholder="e.g. Home Server" value={newServer.name} onChange={e => setNewServer({ ...newServer, name: e.target.value })} />
+                        <input className="input" placeholder="e.g. Home Server" 
+                            value={formState.name} 
+                            onChange={e => setFormState({ ...formState, name: e.target.value })} 
+                        />
                     </div>
                     <div style={{ flex: 2, minWidth:'200px' }}>
                         <label className="small">X-Plex-Token</label>
-                        <input className="input" type="password" placeholder="Token" value={newServer.token} onChange={e => setNewServer({ ...newServer, token: e.target.value })} />
+                        <input className="input" type="password" placeholder="Token" 
+                            value={formState.token} 
+                            onChange={e => setFormState({ ...formState, token: e.target.value })} 
+                        />
                     </div>
                     <div style={{ flex: 2, minWidth:'200px' }}>
                         <label className="small">Manual URL (Optional)</label>
-                        <input className="input" placeholder="http://192.168.1.5:32400" value={newServer.url} onChange={e => setNewServer({ ...newServer, url: e.target.value })} />
+                        <input className="input" placeholder="http://192.168.1.5:32400" 
+                            value={formState.url} 
+                            onChange={e => setFormState({ ...formState, url: e.target.value })} 
+                        />
                     </div>
                 </div>
 
-                <div className="flex" style={{ marginTop: '15px' }}>
-                    <button className="button" onClick={addServer}>Save Server</button>
-                    <button className="button" style={{ backgroundColor: '#64748b' }} onClick={testConnection}>Test Token</button>
-                    {testStatus && <span className="small" style={{ color: testStatus.includes('Success') ? '#10b981' : '#ef4444' }}>{testStatus}</span>}
+                <div className="flex" style={{ marginTop: '15px', gap: '10px' }}>
+                    <button className="button" style={{backgroundColor: isEditing ? '#eab308' : 'var(--accent)', color: isEditing ? 'black' : 'white'}} 
+                        onClick={handleSaveServer}>
+                        {isEditing ? 'Update Server' : 'Save Server'}
+                    </button>
+                    
+                    {isEditing && (
+                        <button className="button" style={{ backgroundColor: '#64748b' }} onClick={handleCancelEdit}>
+                            Cancel
+                        </button>
+                    )}
+
+                    <button className="button" style={{ backgroundColor: '#475569' }} onClick={testFormToken}>
+                        Test Form Data
+                    </button>
+                    
+                    {testStatus && <span className="small" style={{ alignSelf:'center', color: testStatus.includes('Success') ? '#10b981' : '#ef4444' }}>{testStatus}</span>}
                 </div>
             </div>
 
+            {/* LIBRARY SECTION (Same as before) */}
             <div style={{marginTop: '30px', borderTop: '1px solid var(--border)', paddingTop: '20px'}}>
                 <h3>Default Access Control</h3>
                 <div className="flex" style={{gap: '15px', alignItems: 'flex-start'}}>
@@ -161,8 +229,6 @@ export default function Plex() {
                             <button className="button" style={{padding: '2px 8px', fontSize: '0.7rem'}} onClick={handleFetchLibraries}>Fetch Libraries</button>
                         </div>
                         <div style={{border: '1px solid var(--border)', borderRadius: '8px', padding: '10px', backgroundColor: 'var(--bg-input)', minHeight: '100px', maxHeight: '300px', overflowY: 'auto'}}>
-                            
-                            {/* Group Libraries by Server */}
                             {availableLibraries.map(lib => (
                                 <div key={lib.unique_key} style={{display: 'flex', alignItems: 'center', marginBottom: '5px', paddingLeft: '5px'}}>
                                     <input type="checkbox" checked={libraryIds.includes(lib.id)} onChange={() => toggleLibrary(lib.id)} style={{marginRight: '10px'}} />
@@ -173,7 +239,6 @@ export default function Plex() {
                                     </span>
                                 </div>
                             ))}
-                            
                             {availableLibraries.length === 0 && <p className="small" style={{textAlign:'center', marginTop:'30px'}}>Click Fetch to load.</p>}
                         </div>
                         {libFetchStatus && <p className="small" style={{marginTop:'5px', color: '#38bdf8'}}>{libFetchStatus}</p>}

@@ -28,6 +28,30 @@ def add_new_server(type):
     result = add_server(type, data)
     return jsonify({'message': 'Server added', 'server': result})
 
+@settings_bp.route('/servers/<type>/<int:server_id>', methods=['PUT'])
+def update_server_route(type, server_id):
+    """Updates an existing server's details."""
+    data = request.json
+    all_servers = load_servers()
+    
+    if type not in all_servers:
+        return jsonify({'error': 'Invalid server type'}), 400
+    
+    found = False
+    for s in all_servers[type]:
+        if s['id'] == server_id:
+            s['name'] = data.get('name', s['name'])
+            s['token'] = data.get('token', s['token'])
+            s['url'] = data.get('url', s['url'])
+            found = True
+            break
+            
+    if found:
+        save_servers(all_servers)
+        return jsonify({'message': 'Server updated successfully'})
+    
+    return jsonify({'error': 'Server not found'}), 404
+
 @settings_bp.route('/servers/<type>/<int:server_id>', methods=['DELETE'])
 def remove_server(type, server_id):
     delete_server(type, server_id)
@@ -43,9 +67,6 @@ def test_tautulli():
     url = request.json.get('url')
     key = request.json.get('key')
     return jsonify(test_tautulli_connection(url, key))
-
-# --- NEW ROUTE ---
-# ... (imports) ...
 
 @settings_bp.route('/plex/libraries', methods=['POST'])
 def fetch_libraries():
@@ -67,5 +88,3 @@ def fetch_libraries():
         return jsonify(result), 500
     
     return jsonify(result)
-
-# ... (Rest of file) ...
