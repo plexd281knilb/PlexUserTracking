@@ -7,13 +7,16 @@ export default function Plex() {
     // Form State
     const [formState, setFormState] = useState({ id: null, name: '', token: '', url: '' });
     const [isEditing, setIsEditing] = useState(false);
-    const [testStatus, setTestStatus] = useState(null); // For the main form test
-    
-    // Inline Test Results: { 1: "OK", 2: "Fail" }
+    const [testStatus, setTestStatus] = useState(null);
     const [rowTestResults, setRowTestResults] = useState({});
 
-    // Library State
+    // Settings State
     const [libraryIds, setLibraryIds] = useState([]);
+    const [syncSettings, setSyncSettings] = useState({
+        plex_auto_ban: true,   // Default to true
+        plex_auto_invite: true // Default to true
+    });
+    
     const [availableLibraries, setAvailableLibraries] = useState([]);
     const [libFetchStatus, setLibFetchStatus] = useState('');
 
@@ -24,6 +27,12 @@ export default function Plex() {
     const fetchSettings = () => {
         apiGet("/settings").then(s => {
             if(s.default_library_ids) setLibraryIds(s.default_library_ids);
+            
+            // Load Sync Settings (Default to true if missing)
+            setSyncSettings({
+                plex_auto_ban: s.plex_auto_ban !== undefined ? s.plex_auto_ban : true,
+                plex_auto_invite: s.plex_auto_invite !== undefined ? s.plex_auto_invite : true
+            });
         });
     }
 
@@ -37,13 +46,8 @@ export default function Plex() {
     const handleTestRow = async (server) => {
         setRowTestResults(prev => ({ ...prev, [server.id]: 'Testing...' }));
         try {
-            // We use the same backend endpoint but pass this server's specific token
             const res = await apiPost("/settings/test/plex", { token: server.token });
-            if (res.status === 'success') {
-                setRowTestResults(prev => ({ ...prev, [server.id]: '✅ OK' }));
-            } else {
-                setRowTestResults(prev => ({ ...prev, [server.id]: '❌ Fail' }));
-            }
+            setRowTestResults(prev => ({ ...prev, [server.id]: res.status === 'success' ? '✅ OK' : '❌ Fail' }));
         } catch (e) {
             setRowTestResults(prev => ({ ...prev, [server.id]: '❌ Error' }));
         }
@@ -53,7 +57,6 @@ export default function Plex() {
         setFormState(server);
         setIsEditing(true);
         setTestStatus(null);
-        // Scroll to form
         document.getElementById('server-form').scrollIntoView({ behavior: 'smooth' });
     };
 
@@ -86,17 +89,19 @@ export default function Plex() {
         } catch (e) { setTestStatus("Connection Failed"); }
     };
 
-    // --- LIBRARY FETCHING (Unchanged) ---
+    // --- LIBRARIES & SYNC ---
+
     const handleFetchLibraries = async () => {
         setLibFetchStatus('Starting scan...');
         let allLibs = [];
         let errors = [];
 
+        // 1. Saved Servers
         for (const server of servers) {
             try {
                 setLibFetchStatus(`Scanning ${server.name}...`);
                 const res = await apiPost("/settings/plex/libraries", { 
-                    token: server.token,
+                    token: server.token, 
                     url: server.url 
                 }, localStorage.getItem('admin_token'));
                 
@@ -110,6 +115,25 @@ export default function Plex() {
                 errors.push(`${server.name}: Failed`);
             }
         }
+
+        // 2. Form Input
+        if (formState.token) {
+            try {
+                setLibFetchStatus(`Scanning New Server...`);
+                const res = await apiPost("/settings/plex/libraries", { 
+                    token: formState.token,
+                    url: formState.url
+                }, localStorage.getItem('admin_token'));
+                
+                const taggedLibs = res.libraries.map(lib => ({
+                    ...lib,
+                    server_name: "New Server",
+                    unique_key: `New-${lib.id}`
+                }));
+                allLibs = [...allLibs, ...taggedLibs];
+            } catch (e) {}
+        }
+
         setAvailableLibraries(allLibs);
         if (allLibs.length > 0) setLibFetchStatus(`Success! Found ${allLibs.length} libraries.`);
         else setLibFetchStatus(`Failed. ${errors.join(', ')}`);
@@ -119,6 +143,14 @@ export default function Plex() {
         const newIds = libraryIds.includes(id) ? libraryIds.filter(lid => lid !== id) : [...libraryIds, id];
         setLibraryIds(newIds);
         apiPost("/settings", { default_library_ids: newIds }, localStorage.getItem('admin_token'));
+    };
+
+    const toggleSyncSetting = (key) => {
+        const newValue = !syncSettings[key];
+        const newSettings = { ...syncSettings, [key]: newValue };
+        setSyncSettings(newSettings);
+        // Auto-save
+        apiPost("/settings", newSettings, localStorage.getItem('admin_token'));
     };
 
     return (
@@ -137,30 +169,13 @@ export default function Plex() {
                             <td className="small" style={{color:'var(--text-muted)'}}>{s.url || 'Auto'}</td>
                             <td>
                                 <div className="flex" style={{ gap: '5px', alignItems: 'center' }}>
-                                    {/* TEST BUTTON */}
                                     <button className="button" style={{ padding: '4px 8px', fontSize: '0.7rem', backgroundColor: '#64748b' }}
-                                        onClick={() => handleTestRow(s)}>
-                                        Test
-                                    </button>
-                                    
-                                    {/* EDIT BUTTON */}
+                                        onClick={() => handleTestRow(s)}>Test</button>
                                     <button className="button" style={{ padding: '4px 8px', fontSize: '0.7rem' }}
-                                        onClick={() => handleEditRow(s)}>
-                                        Edit
-                                    </button>
-
-                                    {/* REMOVE BUTTON */}
+                                        onClick={() => handleEditRow(s)}>Edit</button>
                                     <button className="button" style={{ padding: '4px 8px', fontSize: '0.7rem', backgroundColor: 'var(--danger)' }}
-                                        onClick={() => handleRemove(s.id)}>
-                                        Remove
-                                    </button>
-
-                                    {/* Test Result Indicator */}
-                                    {rowTestResults[s.id] && (
-                                        <span className="small" style={{ marginLeft: '5px', fontWeight:'bold' }}>
-                                            {rowTestResults[s.id]}
-                                        </span>
-                                    )}
+                                        onClick={() => handleRemove(s.id)}>Remove</button>
+                                    {rowTestResults[s.id] && <span className="small" style={{ marginLeft: '5px' }}>{rowTestResults[s.id]}</span>}
                                 </div>
                             </td>
                         </tr>
@@ -170,7 +185,7 @@ export default function Plex() {
             </table>
 
             {/* FORM SECTION */}
-            <div id="server-form" style={{ borderTop: '1px solid var(--border)', paddingTop: '20px', transition: 'all 0.3s' }}>
+            <div id="server-form" style={{ borderTop: '1px solid var(--border)', paddingTop: '20px' }}>
                 <h4 style={{color: isEditing ? '#38bdf8' : 'white'}}>
                     {isEditing ? `Edit Server: ${formState.name}` : 'Add New Connection'}
                 </h4>
@@ -204,22 +219,13 @@ export default function Plex() {
                         onClick={handleSaveServer}>
                         {isEditing ? 'Update Server' : 'Save Server'}
                     </button>
-                    
-                    {isEditing && (
-                        <button className="button" style={{ backgroundColor: '#64748b' }} onClick={handleCancelEdit}>
-                            Cancel
-                        </button>
-                    )}
-
-                    <button className="button" style={{ backgroundColor: '#475569' }} onClick={testFormToken}>
-                        Test Form Data
-                    </button>
-                    
+                    {isEditing && <button className="button" style={{ backgroundColor: '#64748b' }} onClick={handleCancelEdit}>Cancel</button>}
+                    <button className="button" style={{ backgroundColor: '#475569' }} onClick={testFormToken}>Test Form Data</button>
                     {testStatus && <span className="small" style={{ alignSelf:'center', color: testStatus.includes('Success') ? '#10b981' : '#ef4444' }}>{testStatus}</span>}
                 </div>
             </div>
 
-            {/* LIBRARY SECTION (Same as before) */}
+            {/* SYNC SECTION */}
             <div style={{marginTop: '30px', borderTop: '1px solid var(--border)', paddingTop: '20px'}}>
                 <h3>Default Access Control</h3>
                 <div className="flex" style={{gap: '15px', alignItems: 'flex-start'}}>
@@ -243,10 +249,20 @@ export default function Plex() {
                         </div>
                         {libFetchStatus && <p className="small" style={{marginTop:'5px', color: '#38bdf8'}}>{libFetchStatus}</p>}
                     </div>
+                    
+                    {/* EDITABLE SETTINGS */}
                     <div style={{flex: 1}}>
                         <label className="small">Sync Behavior</label>
-                        <div className="flex" style={{marginTop:'10px'}}><input type="checkbox" checked={true} readOnly /> <span className="small">Auto-Ban on Disable</span></div>
-                        <div className="flex" style={{marginTop:'10px'}}><input type="checkbox" checked={true} readOnly /> <span className="small">Auto-Invite on Enable</span></div>
+                        
+                        <div className="flex" style={{marginTop:'10px', cursor:'pointer'}} onClick={() => toggleSyncSetting('plex_auto_ban')}>
+                            <input type="checkbox" checked={syncSettings.plex_auto_ban} readOnly style={{cursor:'pointer'}} /> 
+                            <span className="small">Auto-Ban on Disable (Remove Access)</span>
+                        </div>
+                        
+                        <div className="flex" style={{marginTop:'10px', cursor:'pointer'}} onClick={() => toggleSyncSetting('plex_auto_invite')}>
+                            <input type="checkbox" checked={syncSettings.plex_auto_invite} readOnly style={{cursor:'pointer'}} /> 
+                            <span className="small">Auto-Invite on Enable (Grant Selected Libraries)</span>
+                        </div>
                     </div>
                 </div>
             </div>
