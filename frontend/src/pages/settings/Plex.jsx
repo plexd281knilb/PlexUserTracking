@@ -6,6 +6,7 @@ export default function Plex() {
     const [newServer, setNewServer] = useState({ name: '', token: '', url: '' });
     const [testStatus, setTestStatus] = useState(null);
     
+    // Library State
     const [libraryIds, setLibraryIds] = useState([]);
     const [availableLibraries, setAvailableLibraries] = useState([]);
     const [libFetchStatus, setLibFetchStatus] = useState('');
@@ -40,27 +41,58 @@ export default function Plex() {
         fetchServers();
     };
 
+    // --- UPDATED: FETCH FROM ALL SERVERS ---
     const handleFetchLibraries = async () => {
-        setLibFetchStatus('Connecting...');
-        try {
-            // Use input URL if typed, otherwise check saved server
-            let urlToUse = newServer.url;
-            let tokenToUse = newServer.token;
+        setLibFetchStatus('Starting scan...');
+        let allLibs = [];
+        let errors = [];
 
-            if(!tokenToUse && servers.length > 0) {
-                tokenToUse = servers[0].token;
-                if(!urlToUse) urlToUse = servers[0].url;
+        // 1. Fetch from Saved Servers
+        for (const server of servers) {
+            try {
+                setLibFetchStatus(`Scanning ${server.name}...`);
+                const res = await apiPost("/settings/plex/libraries", { 
+                    token: server.token,
+                    url: server.url 
+                }, localStorage.getItem('admin_token'));
+                
+                // Tag libraries with Server Name
+                const taggedLibs = res.libraries.map(lib => ({
+                    ...lib,
+                    server_name: server.name,
+                    unique_key: `${server.name}-${lib.id}` // Unique key for React list
+                }));
+                allLibs = [...allLibs, ...taggedLibs];
+            } catch (e) {
+                console.error(e);
+                errors.push(`${server.name}: Failed`);
             }
-            
-            const res = await apiPost("/settings/plex/libraries", { 
-                token: tokenToUse,
-                url: urlToUse
-            }, localStorage.getItem('admin_token'));
-            
-            setAvailableLibraries(res.libraries);
-            setLibFetchStatus(`Success! Found ${res.libraries.length} libraries.`);
-        } catch (e) {
-            setLibFetchStatus(`Failed: ${e.message}`);
+        }
+
+        // 2. Fetch from New Input (if typed)
+        if (newServer.token) {
+            try {
+                setLibFetchStatus(`Scanning New Server...`);
+                const res = await apiPost("/settings/plex/libraries", { 
+                    token: newServer.token,
+                    url: newServer.url
+                }, localStorage.getItem('admin_token'));
+                
+                const taggedLibs = res.libraries.map(lib => ({
+                    ...lib,
+                    server_name: "New Server",
+                    unique_key: `New-${lib.id}`
+                }));
+                allLibs = [...allLibs, ...taggedLibs];
+            } catch (e) {}
+        }
+
+        setAvailableLibraries(allLibs);
+        
+        if (allLibs.length > 0) {
+            setLibFetchStatus(`Success! Found ${allLibs.length} libraries across ${servers.length} servers.`);
+        } else {
+            setLibFetchStatus(`Failed. ${errors.join(', ')}`);
         }
     };
 
@@ -128,13 +160,20 @@ export default function Plex() {
                             <label className="small">Allowed Libraries</label>
                             <button className="button" style={{padding: '2px 8px', fontSize: '0.7rem'}} onClick={handleFetchLibraries}>Fetch Libraries</button>
                         </div>
-                        <div style={{border: '1px solid var(--border)', borderRadius: '8px', padding: '10px', backgroundColor: 'var(--bg-input)', minHeight: '100px', maxHeight: '200px', overflowY: 'auto'}}>
+                        <div style={{border: '1px solid var(--border)', borderRadius: '8px', padding: '10px', backgroundColor: 'var(--bg-input)', minHeight: '100px', maxHeight: '300px', overflowY: 'auto'}}>
+                            
+                            {/* Group Libraries by Server */}
                             {availableLibraries.map(lib => (
-                                <div key={lib.id} style={{display: 'flex', alignItems: 'center', marginBottom: '5px'}}>
+                                <div key={lib.unique_key} style={{display: 'flex', alignItems: 'center', marginBottom: '5px', paddingLeft: '5px'}}>
                                     <input type="checkbox" checked={libraryIds.includes(lib.id)} onChange={() => toggleLibrary(lib.id)} style={{marginRight: '10px'}} />
-                                    <span className="small">{lib.title}</span>
+                                    <span className="small">
+                                        <span style={{fontWeight:'bold', color:'var(--accent)', marginRight:'5px'}}>[{lib.server_name}]</span>
+                                        {lib.title} 
+                                        <span style={{color: 'var(--text-muted)', fontSize:'0.7rem', marginLeft:'5px'}}>({lib.type})</span>
+                                    </span>
                                 </div>
                             ))}
+                            
                             {availableLibraries.length === 0 && <p className="small" style={{textAlign:'center', marginTop:'30px'}}>Click Fetch to load.</p>}
                         </div>
                         {libFetchStatus && <p className="small" style={{marginTop:'5px', color: '#38bdf8'}}>{libFetchStatus}</p>}
