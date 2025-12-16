@@ -1,6 +1,7 @@
 ﻿from flask import Blueprint, jsonify, request
 from integrations import fetch_venmo_payments, fetch_paypal_payments, fetch_zelle_payments, remap_existing_payments
-from database import load_payment_accounts, save_payment_accounts, load_payment_logs, add_account
+# Removed 'add_account' from imports as it might not exist in database.py
+from database import load_payment_accounts, save_payment_accounts, load_payment_logs
 
 payments_bp = Blueprint('payments', __name__, url_prefix='/api/payments')
 
@@ -17,17 +18,45 @@ def get_accounts(service):
 def create_account(service):
     if service not in ['venmo', 'zelle', 'paypal']:
         return jsonify({'error': 'Invalid service'}), 400
+    
     data = request.json
-    result = add_account(service, data)
-    return jsonify({'message': 'Account added', 'account': result}), 201
+    accounts = load_payment_accounts(service)
+    
+    # Generate new ID
+    new_id = 1
+    if accounts:
+        new_id = max([acc.get('id', 0) for acc in accounts]) + 1
+        
+    new_account = {
+        "id": new_id,
+        "email": data.get('email', ''),
+        "password": data.get('password', ''),
+        "imap_server": data.get('imap_server', 'imap.gmail.com'),
+        "port": int(data.get('port', 993)),
+        "enabled": True,
+        "last_scanned": "Never"
+    }
+    
+    accounts.append(new_account)
+    save_payment_accounts(service, accounts)
+    
+    # Return result without password
+    clean_result = {k: v for k, v in new_account.items() if k != 'password'}
+    return jsonify({'message': 'Account added', 'account': clean_result}), 201
 
 @payments_bp.route('/accounts/<service>/<int:account_id>', methods=['DELETE'])
 def delete_account(service, account_id):
     if service not in ['venmo', 'zelle', 'paypal']: return jsonify({'error': 'Invalid service'}), 400
     accounts = load_payment_accounts(service)
+    
+    # Filter out the deleted account
+    initial_len = len(accounts)
     accounts = [acc for acc in accounts if acc.get('id') != account_id]
-    save_payment_accounts(service, accounts)
-    return jsonify({'message': 'Deleted'}), 200
+    
+    if len(accounts) < initial_len:
+        save_payment_accounts(service, accounts)
+        return jsonify({'message': 'Deleted'}), 200
+    return jsonify({'error': 'Account not found'}), 404
 
 @payments_bp.route('/scan/<service>', methods=['POST'])
 def trigger_scan(service):
@@ -51,7 +80,7 @@ def trigger_scan(service):
         print(f"Scan Error: {e}")
         return jsonify({'error': str(e)}), 500
 
-# --- NEW: REMAP ROUTE ---
+# --- REMAP ROUTE ---
 @payments_bp.route('/remap', methods=['POST'])
 def remap_payments():
     try:
