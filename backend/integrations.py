@@ -473,3 +473,18 @@ def test_tautulli_connection(url, key):
         return {"status": "error", "message": "Invalid API Key or URL"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+# ... (Keep all existing code above this line) ...
+
+# --- NEW: Test Email Connection ---
+def test_email_connection(host, port, email_user, email_pass):
+    """Verifies that we can connect and login to the IMAP server."""
+    try:
+        print(f"Testing connection to {host}:{port} for {email_user}...")
+        mail = imaplib.IMAP4_SSL(host, int(port))
+        mail.login(email_user, email_pass)
+        mail.logout()
+        print("Connection Success!")
+        return {"status": "success", "message": "Connection Successful"}
+    except Exception as e:
+        print(f"Connection Failed: {e}")
+        return {"status": "error", "message": str(e)}

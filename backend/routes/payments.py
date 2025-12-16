@@ -1,6 +1,5 @@
 ﻿from flask import Blueprint, jsonify, request
-from integrations import fetch_venmo_payments, fetch_paypal_payments, fetch_zelle_payments, remap_existing_payments
-# Removed 'add_account' from imports as it might not exist in database.py
+from integrations import fetch_venmo_payments, fetch_paypal_payments, fetch_zelle_payments, remap_existing_payments, test_email_connection
 from database import load_payment_accounts, save_payment_accounts, load_payment_logs
 
 payments_bp = Blueprint('payments', __name__, url_prefix='/api/payments')
@@ -9,6 +8,7 @@ payments_bp = Blueprint('payments', __name__, url_prefix='/api/payments')
 def get_accounts(service):
     if service not in ['venmo', 'zelle', 'paypal']:
         return jsonify({'error': 'Invalid service'}), 400
+    
     accounts = load_payment_accounts(service)
     # Remove passwords before sending to frontend
     clean = [{k: v for k, v in acc.items() if k != 'password'} for acc in accounts]
@@ -20,6 +20,17 @@ def create_account(service):
         return jsonify({'error': 'Invalid service'}), 400
     
     data = request.json
+    email_addr = data.get('email', '')
+    password = data.get('password', '')
+    imap_server = data.get('imap_server', 'imap.gmail.com')
+    port = int(data.get('port', 993))
+
+    # 1. TEST CONNECTION BEFORE SAVING
+    test_result = test_email_connection(imap_server, port, email_addr, password)
+    if test_result['status'] == 'error':
+        return jsonify({'error': f"Connection Failed: {test_result['message']}"}), 400
+
+    # 2. LOAD & PREPARE
     accounts = load_payment_accounts(service)
     
     # Generate new ID
@@ -29,33 +40,36 @@ def create_account(service):
         
     new_account = {
         "id": new_id,
-        "email": data.get('email', ''),
-        "password": data.get('password', ''),
-        "imap_server": data.get('imap_server', 'imap.gmail.com'),
-        "port": int(data.get('port', 993)),
+        "email": email_addr,
+        "password": password,
+        "imap_server": imap_server,
+        "port": port,
         "enabled": True,
         "last_scanned": "Never"
     }
     
+    # 3. SAVE
     accounts.append(new_account)
     save_payment_accounts(service, accounts)
     
-    # Return result without password
+    # Return result (clean)
     clean_result = {k: v for k, v in new_account.items() if k != 'password'}
-    return jsonify({'message': 'Account added', 'account': clean_result}), 201
+    return jsonify({'message': 'Account connected & saved', 'account': clean_result}), 201
 
 @payments_bp.route('/accounts/<service>/<int:account_id>', methods=['DELETE'])
 def delete_account(service, account_id):
     if service not in ['venmo', 'zelle', 'paypal']: return jsonify({'error': 'Invalid service'}), 400
+    
     accounts = load_payment_accounts(service)
+    initial_len = len(accounts)
     
     # Filter out the deleted account
-    initial_len = len(accounts)
     accounts = [acc for acc in accounts if acc.get('id') != account_id]
     
     if len(accounts) < initial_len:
         save_payment_accounts(service, accounts)
         return jsonify({'message': 'Deleted'}), 200
+        
     return jsonify({'error': 'Account not found'}), 404
 
 @payments_bp.route('/scan/<service>', methods=['POST'])
@@ -80,7 +94,6 @@ def trigger_scan(service):
         print(f"Scan Error: {e}")
         return jsonify({'error': str(e)}), 500
 
-# --- REMAP ROUTE ---
 @payments_bp.route('/remap', methods=['POST'])
 def remap_payments():
     try:

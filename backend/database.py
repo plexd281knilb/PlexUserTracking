@@ -3,7 +3,6 @@ import os
 
 # --- PERSISTENCE SETUP ---
 # We save all files to a 'data' subdirectory.
-# You will map this folder in Unraid to keep your settings safe.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 
@@ -13,99 +12,117 @@ if not os.path.exists(DATA_DIR):
 def get_path(filename):
     return os.path.join(DATA_DIR, filename)
 
-# --- Generic Load/Save Helpers ---
-def load_data(filename, default_value):
+# Define file keys
+FILES = {
+    'users': 'users.json',
+    'settings': 'settings.json',
+    'servers': 'servers.json',
+    'payment_logs': 'payment_logs.json',
+    'payment_accounts': 'payment_accounts.json',
+    'expenses': 'expenses.json'
+}
+
+# --- Generic Load/Save ---
+def load_data(key, default=None):
+    if default is None: default = []
+    filename = FILES.get(key, f"{key}.json")
     filepath = get_path(filename)
+    
     if not os.path.exists(filepath):
-        save_data(filename, default_value)
-        return default_value
+        save_data(key, default)
+        return default
     try:
         with open(filepath, 'r') as f:
             return json.load(f)
     except (json.JSONDecodeError, IOError):
-        return default_value
+        return default
 
-def save_data(filename, data):
+def save_data(key, data):
+    filename = FILES.get(key, f"{key}.json")
     filepath = get_path(filename)
     with open(filepath, 'w') as f:
         json.dump(data, f, indent=4)
 
 # --- Settings ---
 def load_settings():
-    return load_data('settings.json', {})
+    defaults = {
+        "fee_monthly": "0.00", "fee_yearly": "0.00",
+        "smtp_host": "", "smtp_port": "465", "smtp_user": "", "smtp_pass": "",
+        "plex_auto_ban": True, "plex_auto_invite": True,
+        "default_library_ids": []
+    }
+    data = load_data('settings', defaults)
+    # Merge defaults to ensure new fields exist
+    for k, v in defaults.items():
+        if k not in data: data[k] = v
+    return data
 
-def save_settings(data):
-    save_data('settings.json', data)
+def save_settings(data): save_data('settings', data)
 
 # --- Users ---
-def load_users():
-    return load_data('users.json', [])
+def load_users(): return load_data('users', [])
+def save_users(users): save_data('users', users)
 
-def save_users(data):
-    save_data('users.json', data)
-
-# --- Payment Accounts (Venmo/Zelle/PayPal) ---
-def load_payment_accounts(service):
-    all_accounts = load_data('payment_accounts.json', {'venmo': [], 'zelle': [], 'paypal': []})
-    return all_accounts.get(service, [])
-
-def save_payment_accounts(service, accounts):
-    all_accounts = load_data('payment_accounts.json', {'venmo': [], 'zelle': [], 'paypal': []})
-    all_accounts[service] = accounts
-    save_data('payment_accounts.json', all_accounts)
-
-def add_account(service, account_data):
-    accounts = load_payment_accounts(service)
-    new_id = 1
-    if accounts:
-        new_id = max(acc.get('id', 0) for acc in accounts) + 1
-    
-    account_data['id'] = new_id
-    accounts.append(account_data)
-    save_payment_accounts(service, accounts)
-    return account_data
-
-# --- Multi-Server Management (Plex/Tautulli) ---
+# --- Servers ---
 def load_servers():
-    return load_data('servers.json', {'plex': [], 'tautulli': []})
+    defaults = {'plex': [], 'tautulli': []}
+    data = load_data('servers', defaults)
+    if 'plex' not in data: data['plex'] = []
+    if 'tautulli' not in data: data['tautulli'] = []
+    return data
 
-def save_servers(data):
-    save_data('servers.json', data)
+def save_servers(data): save_data('servers', data)
 
 def add_server(type, server_data):
-    data = load_servers()
+    servers = load_servers()
+    if type not in servers: servers[type] = []
+    
+    # Generate ID
     new_id = 1
-    if data.get(type):
-        new_id = max(s['id'] for s in data[type]) + 1
+    if servers[type]: new_id = max(s['id'] for s in servers[type]) + 1
     
     server_data['id'] = new_id
-    data[type].append(server_data)
-    save_servers(data)
+    servers[type].append(server_data)
+    save_servers(servers)
     return server_data
 
 def delete_server(type, server_id):
-    data = load_servers()
-    if type in data:
-        data[type] = [s for s in data[type] if s['id'] != server_id]
-        save_servers(data)
+    servers = load_servers()
+    if type in servers:
+        servers[type] = [s for s in servers[type] if s['id'] != server_id]
+        save_servers(servers)
 
-# --- Payment Logs (History) ---
-def load_payment_logs():
-    return load_data('payment_logs.json', [])
+# --- Payment Accounts ---
+def load_payment_accounts(service=None):
+    # Data Structure: { 'venmo': [], 'paypal': [], 'zelle': [] }
+    defaults = {'venmo': [], 'paypal': [], 'zelle': []}
+    data = load_data('payment_accounts', defaults)
+    
+    # Ensure keys exist
+    for k in defaults:
+        if k not in data: data[k] = []
+        
+    if service:
+        return data.get(service, [])
+    return data
 
-def save_payment_log(log_entry):
+def save_payment_accounts(service, accounts):
+    data = load_payment_accounts() # Load all
+    data[service] = accounts       # Update specific service
+    save_data('payment_accounts', data)
+
+# --- Payment Logs ---
+def load_payment_logs(): return load_data('payment_logs', [])
+def save_payment_log(log):
     logs = load_payment_logs()
-    # Avoid duplicates based on raw_text + date
-    if not any(l.get('raw_text') == log_entry['raw_text'] and l.get('date') == log_entry['date'] for l in logs):
-        logs.insert(0, log_entry) # Add to top
-        save_data('payment_logs.json', logs[:500]) # Keep last 500
+    # Check duplicate
+    if not any(l['raw_text'] == log['raw_text'] and l['date'] == log['date'] for l in logs):
+        logs.insert(0, log)
+        save_data('payment_logs', logs)
 
 # --- Expenses ---
-def load_expenses():
-    return load_data('expenses.json', [])
-
-def save_expenses(data):
-    save_data('expenses.json', data)
+def load_expenses(): return load_data('expenses', [])
+def save_expenses(expenses): save_data('expenses', expenses)
 
 def add_expense(expense_data):
     data = load_expenses()
