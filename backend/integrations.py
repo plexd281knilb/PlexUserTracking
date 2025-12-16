@@ -9,6 +9,7 @@ from database import load_servers, load_users, save_users, load_payment_accounts
 
 # --- Helper: Extract Body Text ---
 def get_email_body(msg):
+    """Extracts plain text body from an email message."""
     if msg.is_multipart():
         for part in msg.walk():
             ctype = part.get_content_type()
@@ -21,6 +22,7 @@ def get_email_body(msg):
 
 # --- Payment Processing Logic ---
 def process_payment(users, sender_name, amount_str, date_obj, service_name, existing_logs=None, save_db=True):
+    # 1. Parse Date
     try:
         if isinstance(date_obj, str):
             date_str = date_obj
@@ -34,17 +36,20 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
     except:
         date_str = datetime.now().strftime('%Y-%m-%d')
 
+    # 2. Get/Create Log Entry
     if existing_logs is None:
         existing_logs = load_payment_logs()
         
     raw_text = f"{sender_name} sent {amount_str}"
     log_entry = None
     
+    # Find existing log
     for log in existing_logs:
         if log.get('raw_text') == raw_text and log.get('date') == date_str:
             log_entry = log
             break
     
+    # Create if new
     if not log_entry:
         log_entry = {
             "date": date_str,
@@ -57,6 +62,7 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
         }
         existing_logs.insert(0, log_entry)
 
+    # 3. MATCHING LOGIC
     match_found = False
     sender_clean = sender_name.lower().strip()
     
@@ -65,9 +71,14 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
         full_name = user.get('full_name', '').lower().strip()
         aka_list = [x.strip().lower() for x in user.get('aka', '').split(',') if x.strip()]
 
+        # Check 1: Username
         if username and username == sender_clean: match_found = True
+        
+        # Check 2: Full Name (contains)
         if not match_found and full_name and len(full_name) > 3:
             if full_name in sender_clean or sender_clean in full_name: match_found = True
+
+        # Check 3: AKA
         if not match_found and aka_list:
             for alias in aka_list:
                 if alias == sender_clean or (len(alias) > 3 and alias in sender_clean):
@@ -77,26 +88,56 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
         if match_found:
             user['last_paid'] = date_str
             user['last_payment_amount'] = amount_str
-            user['status'] = 'Active'
+            
+            # TRIGGER AUTO-INVITE
+            if user['status'] != 'Active':
+                user['status'] = 'Active'
+                if save_db: 
+                    print(f"Restoring access for {user['username']}...")
+                    modify_plex_access(user, enable=True)
+            else:
+                user['status'] = 'Active'
+            
             log_entry['status'] = "Matched"
             log_entry['mapped_user'] = user['username']
-            if save_db: print(f"MATCH: {user['username']} -> {sender_name} (${amount_str})")
+            
+            if save_db: 
+                print(f"MATCH: {user['username']} -> {sender_name} (${amount_str})")
             break
     
+    # 4. Save (Only if requested - optimization for bulk operations)
     if save_db:
         save_data('payment_logs.json', existing_logs)
         save_users(users)
         
     return match_found
 
+# --- Remap Function ---
 def remap_existing_payments():
+    """
+    Re-runs matching on all logs.
+    Saves only ONCE at the end for speed.
+    """
     print("Starting Bulk Remap...")
     users = load_users()
     logs = load_payment_logs()
     count = 0
+    
     for log in logs:
-        matched = process_payment(users, log['sender'], log['amount'], log['date'], log['service'], existing_logs=logs, save_db=False)
-        if matched: count += 1
+        # Pass save_db=False to prevent disk writes on every loop
+        matched = process_payment(
+            users, 
+            log['sender'], 
+            log['amount'], 
+            log['date'], 
+            log['service'], 
+            existing_logs=logs, 
+            save_db=False # <--- CRITICAL OPTIMIZATION
+        )
+        if matched:
+            count += 1
+
+    # Save once at the end
     save_data('payment_logs.json', logs)
     save_users(users)
     print(f"Remap Complete. Matches found: {count}")
@@ -134,32 +175,40 @@ def modify_plex_access(user, enable=True):
             res = requests.get('https://plex.tv/api/resources?includeHttps=1', headers=headers, timeout=5)
             machine_id = None
             if res.status_code == 200:
-                root = ET.fromstring(res.content)
-                for device in root.findall('Device'):
-                    if device.get('product') == 'Plex Media Server':
-                        # Match by name if possible, otherwise take first
-                        if device.get('name') == server['name']:
-                            machine_id = device.get('clientIdentifier')
-                            break
-                        if not machine_id: machine_id = device.get('clientIdentifier') # Fallback
+                # Use ElementTree for Resources XML (standard)
+                try:
+                    root = ET.fromstring(res.content)
+                    for device in root.findall('Device'):
+                        if device.get('product') == 'Plex Media Server':
+                            # Match by name if possible, otherwise take first
+                            if device.get('name') == server['name']:
+                                machine_id = device.get('clientIdentifier')
+                                break
+                            if not machine_id: machine_id = device.get('clientIdentifier') # Fallback
+                except:
+                    pass # XML parse fail
 
             if not machine_id:
                 results.append(f"{server['name']}: Could not find Machine ID")
                 continue
 
-            # B. Find User ID
+            # B. Find User ID (XML is standard for this endpoint)
             r = requests.get('https://plex.tv/api/users', headers=headers)
             if r.status_code != 200: 
                 results.append(f"{server['name']}: Failed to fetch user list")
                 continue
 
-            root = ET.fromstring(r.content)
-            plex_user_id = None
-            for u in root.findall('User'):
-                if u.get('email', '').lower() == user['email'].lower() or \
-                   u.get('username', '').lower() == user.get('plex_username', '').lower():
-                    plex_user_id = u.get('id')
-                    break
+            try:
+                root = ET.fromstring(r.content)
+                plex_user_id = None
+                for u in root.findall('User'):
+                    if u.get('email', '').lower() == user['email'].lower() or \
+                       u.get('username', '').lower() == user.get('plex_username', '').lower():
+                        plex_user_id = u.get('id')
+                        break
+            except:
+                results.append(f"{server['name']}: XML Parse Error on Users list")
+                continue
             
             # C. Perform Action
             if not enable:
@@ -173,27 +222,9 @@ def modify_plex_access(user, enable=True):
             else:
                 # ENABLE (UPDATE/ADD SHARE)
                 if not plex_user_id:
-                    # User must exist as a friend or pending invite to update shares easily.
-                    # Full invite flow is complex (requires sending email).
-                    # For now, we only update existing friends/users found in the list.
                     results.append(f"{server['name']}: User not found on friend list. Please invite via email first.")
                     continue
 
-                # Construct Share URL
-                # PUT https://plex.tv/api/servers/{machineIdentifier}/shared_servers/{plex_user_id}?sections={ids}
-                # Note: This updates an existing share.
-                
-                # If library_ids is empty, we share nothing (effectively disabling, but keeping friend)
-                # or we just skip. Let's try to share what is selected.
-                sections_str = ",".join([str(lid) for lid in library_ids])
-                
-                # We need to find the specific 'SharedServer' ID for this user on this machine
-                # The user list XML contains <Server id="123" serverId="machineID" /> children under the User.
-                
-                # This is tricky via the standard API. A simpler method often used is:
-                # POST https://plex.tv/api/servers/{machineIdentifier}/shared_servers
-                # Payload: { server_id: machine_id, shared_server: { library_section_ids: [...], invited_email: ... } }
-                
                 json_payload = {
                     "server_id": machine_id,
                     "shared_server": {
@@ -218,13 +249,14 @@ def modify_plex_access(user, enable=True):
 
     return results
 
-# --- Library Fetcher (Keep the working JSON version) ---
+# --- Library Fetcher (JSON + Manual URL) ---
 def get_plex_libraries(token, manual_url=None):
     headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
     
     def parse_libraries(response, server_name="Unknown"):
         libraries = []
         try:
+            # Try JSON first
             data = response.json()
             directories = data.get('MediaContainer', {}).get('Directory', [])
             for d in directories:
@@ -235,6 +267,7 @@ def get_plex_libraries(token, manual_url=None):
                 })
             return {"status": "success", "libraries": libraries, "server_name": server_name}
         except ValueError:
+            # Fallback to XML
             try:
                 root = ET.fromstring(response.content)
                 for directory in root.findall('Directory'):
@@ -245,8 +278,9 @@ def get_plex_libraries(token, manual_url=None):
                     })
                 return {"status": "success", "libraries": libraries, "server_name": server_name}
             except Exception as e:
-                return {"error": f"Parsing Failed: {str(e)} - Content: {response.text[:50]}"}
+                return {"error": f"Parsing Failed: {str(e)}"}
 
+    # 1. Try Manual URL
     if manual_url:
         clean_url = manual_url.strip().rstrip('/')
         urls = [clean_url]
@@ -265,6 +299,7 @@ def get_plex_libraries(token, manual_url=None):
                 last_error = str(e)
         return {"error": f"Manual Connection Failed: {last_error}"}
 
+    # 2. Auto-Discovery
     try:
         res = requests.get('https://plex.tv/api/resources?includeHttps=1', headers=headers, timeout=5)
         if res.status_code != 200: return {"error": "Failed to connect to Plex.tv"}
