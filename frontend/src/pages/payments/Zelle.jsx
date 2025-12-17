@@ -6,6 +6,7 @@ export default function Zelle() {
     const [logs, setLogs] = useState([]);
     const [users, setUsers] = useState([]);
     const [newAccount, setNewAccount] = useState({ email: '', password: '', imap_server: 'imap.gmail.com', port: 993 });
+    const [manualPayment, setManualPayment] = useState({ date: '', sender: '', amount: '' });
     const [searchTerm, setSearchTerm] = useState('');
     const [status, setStatus] = useState('');
     const [loading, setLoading] = useState(false);
@@ -47,7 +48,7 @@ export default function Zelle() {
         try {
             const res = await apiPost("/payments/scan/zelle", {}, localStorage.getItem('admin_token'));
             alert(res.message);
-            fetchData();
+            fetchData(); 
         } catch (e) { alert("Scan failed"); }
         setLoading(false);
     };
@@ -61,6 +62,26 @@ export default function Zelle() {
     const handleSaveSettings = async () => {
         await apiPost("/settings", { zelle_search_term: searchTerm }, localStorage.getItem('admin_token'));
         alert("Search term saved.");
+    };
+
+    // --- NEW: Handle Manual Payment ---
+    const handleManualAdd = async () => {
+        if (!manualPayment.date || !manualPayment.sender || !manualPayment.amount) {
+            alert("Please fill in Date, Sender, and Amount.");
+            return;
+        }
+        try {
+            await apiPost("/payments/manual", {
+                service: 'Zelle',
+                ...manualPayment
+            }, localStorage.getItem('admin_token'));
+            
+            setManualPayment({ date: '', sender: '', amount: '' });
+            fetchData();
+            alert("Payment added!");
+        } catch (e) {
+            alert("Failed to add payment.");
+        }
     };
 
     const handleMatch = async () => {
@@ -97,13 +118,36 @@ export default function Zelle() {
             </table>
 
             <div style={{marginTop:'30px', borderTop:'1px solid var(--border)', paddingTop:'20px'}}>
-                <h4>Add Account</h4>
+                <h4>Add Scanner Account</h4>
                 <div className="flex" style={{gap:'10px'}}>
                     <input className="input" placeholder="Email" value={newAccount.email} onChange={e=>setNewAccount({...newAccount, email:e.target.value})} />
                     <input className="input" type="password" placeholder="App Password" value={newAccount.password} onChange={e=>setNewAccount({...newAccount, password:e.target.value})} />
                 </div>
                 <button className="button" style={{marginTop:'10px'}} onClick={handleAdd}>Save & Test</button>
                 {status && <span className="small" style={{color:'red', marginLeft:'10px'}}>{status}</span>}
+            </div>
+
+            {/* --- MANUAL ENTRY SECTION --- */}
+            <div style={{marginTop:'40px', borderTop:'1px solid var(--border)', paddingTop:'20px'}}>
+                <h3>Manual Entry</h3>
+                <p className="small" style={{color:'var(--text-muted)', marginBottom:'10px'}}>
+                    Since Zelle emails may not be scannable, you can manually enter payments here to link them to users.
+                </p>
+                <div className="flex" style={{gap:'10px', alignItems:'flex-end'}}>
+                    <div style={{flex:1}}>
+                        <label className="small">Date</label>
+                        <input type="date" className="input" value={manualPayment.date} onChange={e=>setManualPayment({...manualPayment, date: e.target.value})} />
+                    </div>
+                    <div style={{flex:2}}>
+                        <label className="small">Sender Name</label>
+                        <input className="input" placeholder="e.g. John Doe" value={manualPayment.sender} onChange={e=>setManualPayment({...manualPayment, sender: e.target.value})} />
+                    </div>
+                    <div style={{flex:1}}>
+                        <label className="small">Amount</label>
+                        <input className="input" placeholder="$50.00" value={manualPayment.amount} onChange={e=>setManualPayment({...manualPayment, amount: e.target.value})} />
+                    </div>
+                    <button className="button" onClick={handleManualAdd}>Add Payment</button>
+                </div>
             </div>
 
             <div style={{marginTop:'40px'}}>

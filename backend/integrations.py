@@ -21,7 +21,7 @@ def get_email_body(msg):
 
 # --- Payment Processing Logic ---
 def process_payment(users, sender_name, amount_str, date_obj, service_name, existing_logs=None, save_db=True):
-    # FIXED: Normalize Date to YYYY-MM-DD
+    # FIXED: Date Normalization to YYYY-MM-DD
     date_str = datetime.now().strftime('%Y-%m-%d')
     try:
         if isinstance(date_obj, str):
@@ -33,7 +33,8 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
                 date_str = date_obj
         else:
             date_str = date_obj.strftime('%Y-%m-%d')
-    except: pass 
+    except:
+        pass 
 
     if existing_logs is None:
         existing_logs = load_payment_logs()
@@ -210,7 +211,7 @@ def get_plex_libraries(token, manual_url=None):
         return {"error": "No server reachable"}
     except Exception as e: return {"error": str(e)}
 
-# --- FETCHERS (Explicit Logic) ---
+# --- FETCHERS ---
 
 def fetch_venmo_payments():
     settings = load_settings()
@@ -264,11 +265,13 @@ def fetch_venmo_payments():
 def fetch_paypal_payments():
     settings = load_settings()
     search_term = settings.get('paypal_search_term', 'sent you')
+    
     accounts = load_payment_accounts('paypal')
     users = load_users()
     payment_count = 0
     errors = []
     
+    # Regex for "Name sent you $X.XX USD"
     paypal_pattern = re.compile(r"([A-Za-z ]+) sent you (\$\d+\.\d{2}) USD")
 
     for account in accounts:
@@ -286,9 +289,19 @@ def fetch_paypal_payments():
                 for e_id in messages[0].split()[-50:]:
                     _, msg_data = mail.fetch(e_id, '(RFC822)')
                     msg = email.message_from_bytes(msg_data[0][1])
-                    body = get_email_body(msg)
                     
-                    match = paypal_pattern.search(body)
+                    # --- FIXED: Check Subject First ---
+                    subject_val = decode_header(msg["Subject"])[0][0]
+                    if isinstance(subject_val, bytes): subject_val = subject_val.decode()
+                    
+                    # Try matching subject
+                    match = paypal_pattern.search(subject_val)
+                    
+                    # Fallback to body if subject didn't match
+                    if not match:
+                        body = get_email_body(msg)
+                        match = paypal_pattern.search(body)
+                    
                     if match:
                         if process_payment(users, match.group(1).strip(), match.group(2), msg["Date"], 'PayPal'):
                             payment_count += 1
@@ -310,11 +323,13 @@ def fetch_paypal_payments():
 def fetch_zelle_payments():
     settings = load_settings()
     search_term = settings.get('zelle_search_term', 'received')
+    
     accounts = load_payment_accounts('zelle')
     users = load_users()
     payment_count = 0
     errors = []
     
+    # Regex: "received $X.XX from Name"
     zelle_pattern = re.compile(r"received (\$\d+\.\d{2}) from ([A-Za-z ]+)")
 
     for account in accounts:
@@ -332,10 +347,18 @@ def fetch_zelle_payments():
                 for e_id in messages[0].split()[-50:]:
                     _, msg_data = mail.fetch(e_id, '(RFC822)')
                     msg = email.message_from_bytes(msg_data[0][1])
-                    body = get_email_body(msg)
                     
-                    match = zelle_pattern.search(body)
+                    # --- FIXED: Check Subject First ---
+                    subject_val = decode_header(msg["Subject"])[0][0]
+                    if isinstance(subject_val, bytes): subject_val = subject_val.decode()
+                    
+                    match = zelle_pattern.search(subject_val)
+                    if not match:
+                        body = get_email_body(msg)
+                        match = zelle_pattern.search(body)
+                    
                     if match:
+                        # Zelle regex groups: (1) is Amount, (2) is Name
                         if process_payment(users, match.group(2).strip(), match.group(1), msg["Date"], 'Zelle'):
                             payment_count += 1
             
