@@ -35,7 +35,7 @@ def get_email_subject(msg):
                 subject += token.decode("utf-8", errors="ignore")
         else:
             subject += str(token)
-    return subject
+    return subject.strip()
 
 # --- Payment Processing Logic ---
 def process_payment(users, sender_name, amount_str, date_obj, service_name, existing_logs=None, save_db=True):
@@ -61,6 +61,7 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
         
     raw_text = f"{sender_name} sent {amount_str}"
     log_entry = None
+    is_new_entry = False
     
     # Check for duplicate
     for log in existing_logs:
@@ -69,6 +70,7 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
             break
     
     if not log_entry:
+        is_new_entry = True
         log_entry = {
             "date": date_str,
             "service": service_name,
@@ -118,7 +120,7 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
         save_data('payment_logs', existing_logs)
         save_users(users)
         
-    return match_found
+    return is_new_entry
 
 def remap_existing_payments():
     print("Starting Bulk Remap...")
@@ -126,8 +128,12 @@ def remap_existing_payments():
     logs = load_payment_logs()
     count = 0
     for log in logs:
-        matched = process_payment(users, log['sender'], log['amount'], log['date'], log['service'], existing_logs=logs, save_db=False)
-        if matched: count += 1
+        # Only check Unmapped to save processing
+        if log.get('status') != 'Matched':
+            # We don't care if it's "new", we care if it matches NOW
+            process_payment(users, log['sender'], log['amount'], log['date'], log['service'], existing_logs=logs, save_db=False)
+            if log.get('status') == 'Matched':
+                count += 1
     save_data('payment_logs', logs)
     save_users(users)
     print(f"Remap Complete. Matches found: {count}")
@@ -213,7 +219,7 @@ def get_plex_libraries(token, manual_url=None):
         except: pass
     return {"error": "Connection Failed"}
 
-# --- FETCHERS (Fixed Syntax) ---
+# --- FETCHERS ---
 
 def fetch_venmo_payments():
     settings = load_settings()
@@ -258,9 +264,6 @@ def fetch_venmo_payments():
             if mail:
                 try:
                     mail.close()
-                except:
-                    pass
-                try:
                     mail.logout()
                 except:
                     pass
@@ -277,8 +280,8 @@ def fetch_paypal_payments():
     payment_count = 0
     errors = []
     
-    # Matches: "Name sent you $50.00 USD"
-    paypal_pattern = re.compile(r"(.*?) sent you (\$\d+\.\d{2}) USD", re.IGNORECASE)
+    # Matches: "Name sent you $50.00 USD" (Case insensitive, handling spaces)
+    paypal_pattern = re.compile(r"(.*?)\s+sent\s+you\s+(\$\d+\.\d{2})\s+USD", re.IGNORECASE)
 
     for acc in accounts:
         if not acc.get('enabled', True): continue
@@ -288,6 +291,7 @@ def fetch_paypal_payments():
             mail.login(acc['email'], acc['password'])
             mail.select('inbox')
 
+            # Search Subject
             criteria = f'(SUBJECT "{search_term}")'
             status, messages = mail.search(None, criteria)
             
@@ -306,6 +310,7 @@ def fetch_paypal_payments():
                         match = paypal_pattern.search(body)
                     
                     if match:
+                        # process_payment returns True only if NEW log entry is created
                         if process_payment(users, match.group(1).strip(), match.group(2), msg["Date"], 'PayPal'):
                             payment_count += 1
             
@@ -318,9 +323,6 @@ def fetch_paypal_payments():
             if mail:
                 try:
                     mail.close()
-                except:
-                    pass
-                try:
                     mail.logout()
                 except:
                     pass
@@ -372,9 +374,6 @@ def fetch_zelle_payments():
             if mail:
                 try:
                     mail.close()
-                except:
-                    pass
-                try:
                     mail.logout()
                 except:
                     pass
@@ -385,6 +384,7 @@ def fetch_zelle_payments():
 
 # --- Utils ---
 def fetch_all_plex_users():
+    # Import logic directly here to be self-contained
     servers = load_servers()['plex']
     users = load_users()
     count = 0
