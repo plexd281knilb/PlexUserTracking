@@ -44,8 +44,12 @@ export default function Paypal() {
 
     const handleScan = async () => {
         setLoading(true);
-        await apiPost("/payments/scan/paypal", {}, localStorage.getItem('admin_token'));
-        fetchData(); setLoading(false);
+        try {
+            const res = await apiPost("/payments/scan/paypal", {}, localStorage.getItem('admin_token'));
+            alert(res.message);
+            fetchData();
+        } catch (e) { alert("Scan failed"); }
+        setLoading(false);
     };
 
     const handleDeleteLog = async (log) => {

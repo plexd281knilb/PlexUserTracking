@@ -7,6 +7,7 @@ from datetime import datetime
 from email.header import decode_header
 from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, save_payment_log, load_settings, save_data, load_payment_logs
 
+# --- Helper: Extract Body Text ---
 def get_email_body(msg):
     if msg.is_multipart():
         for part in msg.walk():
@@ -18,12 +19,13 @@ def get_email_body(msg):
         return msg.get_payload(decode=True).decode('utf-8', errors='ignore')
     return ""
 
+# --- Payment Processing Logic ---
 def process_payment(users, sender_name, amount_str, date_obj, service_name, existing_logs=None, save_db=True):
-    # FIXED: Date Normalization to prevent duplicates
+    # Normalize Date to YYYY-MM-DD to prevent duplicates
     date_str = datetime.now().strftime('%Y-%m-%d')
     try:
         if isinstance(date_obj, str):
-            # Attempt to parse raw email date string (RFC 2822)
+            # Parse email date strings (e.g., "Fri, 28 Nov 2025...")
             date_tuple = email.utils.parsedate_tz(date_obj)
             if date_tuple:
                 local_date = datetime.fromtimestamp(email.utils.mktime_tz(date_tuple))
@@ -33,7 +35,7 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
         else:
             date_str = date_obj.strftime('%Y-%m-%d')
     except:
-        pass # Keep today's date if parsing fails
+        pass 
 
     if existing_logs is None:
         existing_logs = load_payment_logs()
@@ -41,7 +43,7 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
     raw_text = f"{sender_name} sent {amount_str}"
     log_entry = None
     
-    # Check for duplicate using normalized date
+    # Check for duplicate
     for log in existing_logs:
         if log.get('raw_text') == raw_text and log.get('date') == date_str:
             log_entry = log
@@ -80,7 +82,6 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
             user['last_paid'] = date_str
             user['last_payment_amount'] = amount_str
             
-            # TRIGGER AUTO-INVITE
             if user['status'] != 'Active':
                 user['status'] = 'Active'
                 if save_db: 
@@ -113,8 +114,10 @@ def remap_existing_payments():
     print(f"Remap Complete. Matches found: {count}")
     return count
 
+# --- PLEX LOGIC ---
 def modify_plex_access(user, enable=True):
     settings = load_settings()
+    
     if not enable and user.get('payment_freq') == 'Exempt':
         return [f"Skipped {user.get('username')}: User is Exempt"]
 
@@ -209,27 +212,31 @@ def get_plex_libraries(token, manual_url=None):
         return {"error": "No server reachable"}
     except Exception as e: return {"error": str(e)}
 
-# --- FETCHERS ---
+# --- FETCHERS (Explicit Logic) ---
 
 def fetch_venmo_payments():
     settings = load_settings()
     search_term = settings.get('venmo_search_term', 'paid you')
+    
     accounts = load_payment_accounts('venmo')
     users = load_users()
-    count = 0
+    payment_count = 0
+    errors = []
+    
     venmo_pattern = re.compile(r"^(.*?) paid you (\$\d+\.\d{2})")
 
-    for acc in accounts:
-        if not acc.get('enabled', True): continue
+    for account in accounts:
+        if not account.get('enabled', True): continue
         mail = None
         try:
-            mail = imaplib.IMAP4_SSL(acc['imap_server'], acc['port'])
-            mail.login(acc['email'], acc['password'])
+            mail = imaplib.IMAP4_SSL(account['imap_server'], account['port'])
+            mail.login(account['email'], account['password'])
             mail.select('inbox')
 
             # Use configured search term
             criteria = f'(SUBJECT "{search_term}")'
-            if "venmo.com" in acc['email']: criteria = f'(FROM "venmo@venmo.com" {criteria})'
+            # Optional: restrict sender if "venmo" is in the user's email domain to avoid noise
+            # but generally searching Subject is safer for generic rules.
             
             status, messages = mail.search(None, criteria)
             if status == 'OK':
@@ -241,32 +248,40 @@ def fetch_venmo_payments():
 
                     match = venmo_pattern.search(subject)
                     if match:
-                        if process_payment(users, match.group(1).strip(), match.group(2), msg["Date"], 'Venmo'): count+=1
-            acc['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        except Exception as e: print(f"Venmo Scan Error: {e}")
-        finally: 
-            if mail: 
+                        if process_payment(users, match.group(1).strip(), match.group(2), msg["Date"], 'Venmo'):
+                            payment_count += 1
+            
+            account['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+        except Exception as e:
+            errors.append(f"{account['email']}: {str(e)}")
+            print(f"Venmo Scan Error: {e}")
+        finally:
+            if mail:
                 try: mail.close(); mail.logout()
                 except: pass
 
     save_users(users)
     save_payment_accounts('venmo', accounts)
-    return count
+    return {"count": payment_count, "errors": errors}
 
 def fetch_paypal_payments():
     settings = load_settings()
     search_term = settings.get('paypal_search_term', 'sent you')
+    
     accounts = load_payment_accounts('paypal')
     users = load_users()
-    count = 0
+    payment_count = 0
+    errors = []
+    
     paypal_pattern = re.compile(r"([A-Za-z ]+) sent you (\$\d+\.\d{2}) USD")
 
-    for acc in accounts:
-        if not acc.get('enabled', True): continue
+    for account in accounts:
+        if not account.get('enabled', True): continue
         mail = None
         try:
-            mail = imaplib.IMAP4_SSL(acc['imap_server'], acc['port'])
-            mail.login(acc['email'], acc['password'])
+            mail = imaplib.IMAP4_SSL(account['imap_server'], account['port'])
+            mail.login(account['email'], account['password'])
             mail.select('inbox')
 
             criteria = f'(SUBJECT "{search_term}")'
@@ -277,34 +292,43 @@ def fetch_paypal_payments():
                     _, msg_data = mail.fetch(e_id, '(RFC822)')
                     msg = email.message_from_bytes(msg_data[0][1])
                     body = get_email_body(msg)
+                    
                     match = paypal_pattern.search(body)
                     if match:
-                        if process_payment(users, match.group(1).strip(), match.group(2), msg["Date"], 'PayPal'): count+=1
-            acc['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        except Exception as e: print(f"PayPal Scan Error: {e}")
-        finally: 
-            if mail: 
+                        if process_payment(users, match.group(1).strip(), match.group(2), msg["Date"], 'PayPal'):
+                            payment_count += 1
+            
+            account['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+        except Exception as e:
+            errors.append(f"{account['email']}: {str(e)}")
+            print(f"PayPal Scan Error: {e}")
+        finally:
+            if mail:
                 try: mail.close(); mail.logout()
                 except: pass
 
     save_users(users)
     save_payment_accounts('paypal', accounts)
-    return count
+    return {"count": payment_count, "errors": errors}
 
 def fetch_zelle_payments():
     settings = load_settings()
     search_term = settings.get('zelle_search_term', 'received')
+    
     accounts = load_payment_accounts('zelle')
     users = load_users()
-    count = 0
+    payment_count = 0
+    errors = []
+    
     zelle_pattern = re.compile(r"received (\$\d+\.\d{2}) from ([A-Za-z ]+)")
 
-    for acc in accounts:
-        if not acc.get('enabled', True): continue
+    for account in accounts:
+        if not account.get('enabled', True): continue
         mail = None
         try:
-            mail = imaplib.IMAP4_SSL(acc['imap_server'], acc['port'])
-            mail.login(acc['email'], acc['password'])
+            mail = imaplib.IMAP4_SSL(account['imap_server'], account['port'])
+            mail.login(account['email'], account['password'])
             mail.select('inbox')
 
             criteria = f'(SUBJECT "{search_term}")'
@@ -315,32 +339,30 @@ def fetch_zelle_payments():
                     _, msg_data = mail.fetch(e_id, '(RFC822)')
                     msg = email.message_from_bytes(msg_data[0][1])
                     body = get_email_body(msg)
+                    
                     match = zelle_pattern.search(body)
                     if match:
-                        if process_payment(users, match.group(2).strip(), match.group(1), msg["Date"], 'Zelle'): count+=1
-            acc['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        except Exception as e: print(f"Zelle Scan Error: {e}")
-        finally: 
-            if mail: 
+                        # Zelle regex usually: group 2 is name, group 1 is amount
+                        if process_payment(users, match.group(2).strip(), match.group(1), msg["Date"], 'Zelle'):
+                            payment_count += 1
+            
+            account['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+        except Exception as e:
+            errors.append(f"{account['email']}: {str(e)}")
+            print(f"Zelle Scan Error: {e}")
+        finally:
+            if mail:
                 try: mail.close(); mail.logout()
                 except: pass
 
     save_users(users)
     save_payment_accounts('zelle', accounts)
-    return count
+    return {"count": payment_count, "errors": errors}
 
-def test_email_connection(host, port, email_user, email_pass):
-    try:
-        mail = imaplib.IMAP4_SSL(host, int(port))
-        mail.login(email_user, email_pass)
-        mail.logout()
-        return {"status": "success"}
-    except Exception as e: return {"status": "error", "message": str(e)}
-
-def fetch_all_plex_users():
-    return 0
-def fetch_all_tautulli_users():
-    return 0
+# --- Utils ---
+def fetch_all_plex_users(): return 0
+def fetch_all_tautulli_users(): return 0
 def test_plex_connection(token, url="https://plex.tv/api/users"):
     try:
         headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
@@ -352,3 +374,11 @@ def test_tautulli_connection(url, key):
         requests.get(f"{url}/api/v2?apikey={key}&cmd=get_server_info", timeout=5)
         return {"status": "success"}
     except Exception as e: return {"status": "error", "message": str(e)}
+def test_email_connection(host, port, email_user, email_pass):
+    try:
+        mail = imaplib.IMAP4_SSL(host, int(port))
+        mail.login(email_user, email_pass)
+        mail.logout()
+        return {"status": "success", "message": "Connection Successful"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

@@ -32,11 +32,17 @@ def delete_account(service, aid):
 
 @payments_bp.route('/scan/<service>', methods=['POST'])
 def trigger_scan(service):
-    count = 0
-    if service == 'venmo': count = fetch_venmo_payments()
-    elif service == 'paypal': count = fetch_paypal_payments()
-    elif service == 'zelle': count = fetch_zelle_payments()
-    return jsonify({'message': f'Found {count} new payments.'})
+    result = {"count": 0, "errors": []}
+    
+    if service == 'venmo': result = fetch_venmo_payments()
+    elif service == 'paypal': result = fetch_paypal_payments()
+    elif service == 'zelle': result = fetch_zelle_payments()
+    
+    msg = f"Found {result['count']} new payments."
+    if result['errors']:
+        msg += f" Errors: {'; '.join(result['errors'])}"
+    
+    return jsonify({'message': msg, 'details': result})
 
 @payments_bp.route('/remap', methods=['POST'])
 def remap():

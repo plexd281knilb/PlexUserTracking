@@ -44,12 +44,16 @@ export default function Venmo() {
 
     const handleScan = async () => {
         setLoading(true);
-        await apiPost("/payments/scan/venmo", {}, localStorage.getItem('admin_token'));
-        fetchData(); setLoading(false);
+        try {
+            const res = await apiPost("/payments/scan/venmo", {}, localStorage.getItem('admin_token'));
+            alert(res.message);
+            fetchData();
+        } catch (e) { alert("Scan failed"); }
+        setLoading(false);
     };
 
     const handleDeleteLog = async (log) => {
-        if(!window.confirm("Delete this log? It will be re-added on next scan if still in inbox.")) return;
+        if(!window.confirm("Delete log?")) return;
         await apiPost("/payments/logs/delete", log, localStorage.getItem('admin_token'));
         fetchData();
     };
