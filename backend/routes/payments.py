@@ -72,7 +72,7 @@ def add_manual_payment():
         return jsonify({'error': 'Missing fields'}), 400
 
     # FIX: Raw text must match exactly what 'process_payment' creates to avoid duplicates during re-map
-    # Format: "{sender} sent {amount}"
+    # Standard Format: "{sender} sent {amount}"
     log_entry = {
         "date": date_str,
         "service": service,

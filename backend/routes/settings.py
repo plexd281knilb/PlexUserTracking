@@ -12,10 +12,14 @@ def get_settings():
 def update_settings():
     data = request.json
     current_settings = load_settings()
+    
+    # Update only provided fields, keep existing ones (like search terms)
     current_settings.update(data)
+    
     save_settings(current_settings)
-    return jsonify({'message': 'Settings updated'})
+    return jsonify({'message': 'Settings updated', 'settings': current_settings})
 
+# --- Server Routes (Keep existing logic) ---
 @settings_bp.route('/servers', methods=['GET'])
 def get_servers():
     return jsonify(load_servers())
@@ -24,7 +28,6 @@ def get_servers():
 def add_new_server(type):
     data = request.json
     if not data: return jsonify({'error': 'No data'}), 400
-    
     result = add_server(type, data)
     return jsonify({'message': 'Server added', 'server': result})
 
@@ -32,23 +35,18 @@ def add_new_server(type):
 def update_server_route(type, server_id):
     data = request.json
     all_servers = load_servers()
-    
-    if type not in all_servers:
-        return jsonify({'error': 'Invalid server type'}), 400
+    if type not in all_servers: return jsonify({'error': 'Invalid server type'}), 400
     
     found = False
     for s in all_servers[type]:
         if s['id'] == server_id:
-            s['name'] = data.get('name', s['name'])
-            s['token'] = data.get('token', s['token'])
-            s['url'] = data.get('url', s['url'])
+            s.update(data) # Generic update
             found = True
             break
             
     if found:
         save_servers(all_servers)
         return jsonify({'message': 'Server updated successfully'})
-    
     return jsonify({'error': 'Server not found'}), 404
 
 @settings_bp.route('/servers/<type>/<int:server_id>', methods=['DELETE'])
@@ -78,5 +76,4 @@ def fetch_libraries():
     result = get_plex_libraries(token, manual_url)
     if 'error' in result:
         return jsonify(result), 500
-    
     return jsonify(result)
