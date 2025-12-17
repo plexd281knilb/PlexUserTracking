@@ -39,9 +39,16 @@ def save_data(key, data):
     with open(filepath, 'w') as f:
         json.dump(data, f, indent=4)
 
-# --- Wrappers ---
+# --- Settings ---
 def load_settings():
-    defaults = {"fee_monthly": "0.00", "fee_yearly": "0.00", "plex_auto_ban": True, "plex_auto_invite": True, "default_library_ids": []}
+    defaults = {
+        "fee_monthly": "0.00", "fee_yearly": "0.00", 
+        "plex_auto_ban": True, "plex_auto_invite": True, 
+        "default_library_ids": [],
+        "venmo_search_term": "paid you",
+        "paypal_search_term": "sent you",
+        "zelle_search_term": "received"
+    }
     data = load_data('settings', defaults)
     for k, v in defaults.items(): 
         if k not in data: data[k] = v
@@ -82,12 +89,20 @@ def save_payment_accounts(service, accounts):
     data[service] = accounts
     save_data('payment_accounts', data)
 
+# --- LOGS ---
 def load_payment_logs(): return load_data('payment_logs', [])
 def save_payment_log(log):
     logs = load_payment_logs()
+    # Check duplicate
     if not any(l['raw_text'] == log['raw_text'] and l['date'] == log['date'] for l in logs):
         logs.insert(0, log)
         save_data('payment_logs', logs)
+
+def delete_payment_log(log_data):
+    logs = load_payment_logs()
+    # Remove log that matches both date and text
+    new_logs = [l for l in logs if not (l.get('date') == log_data.get('date') and l.get('raw_text') == log_data.get('raw_text'))]
+    save_data('payment_logs', new_logs)
 
 def load_expenses(): return load_data('expenses', [])
 def save_expenses(data): save_data('expenses', data)
