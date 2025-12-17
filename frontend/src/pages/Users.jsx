@@ -14,7 +14,6 @@ const Users = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            // Fetch Users, Logs, AND Settings (for fee calculation)
             const [uData, lData, sData] = await Promise.all([
                 apiGet('/users'),
                 apiGet('/payment_logs'),
@@ -29,43 +28,58 @@ const Users = () => {
 
     useEffect(() => { fetchData(); }, []);
 
-    // --- HELPER: Calculate Paid Through Date ---
+    // --- HELPER: Calculate Paid Through Date (Calendar Based) ---
     const calculatePaidThrough = (user) => {
         if (user.payment_freq === 'Exempt') return <span style={{color:'#10b981', fontWeight:'bold'}}>Forever</span>;
-        if (!user.last_paid || user.last_paid === 'Never') return <span style={{color:'#94a3b8'}}>-</span>;
+        
+        // Default for Active users with no payment history: 12/31/2025
+        if ((!user.last_paid || user.last_paid === 'Never')) {
+            return user.status === 'Active' ? <span style={{color:'#f59e0b'}}>12/31/2025 (Default)</span> : <span style={{color:'#94a3b8'}}>-</span>;
+        }
 
-        // Parse Date
         const paidDate = new Date(user.last_paid);
         if (isNaN(paidDate.getTime())) return <span style={{color:'#94a3b8'}}>Invalid Date</span>;
 
-        // Parse Amount (Remove '$' and parse float)
         const amountPaid = parseFloat((user.last_payment_amount || '0').replace(/[^0-9.]/g, ''));
-        
-        // Get Fees from Settings
         const monthlyFee = parseFloat(settings.fee_monthly || 0);
         const yearlyFee = parseFloat(settings.fee_yearly || 0);
 
-        let monthsToAdd = 0;
+        let endDate = new Date(paidDate);
+        let isValid = false;
 
-        // Calculate Duration based on Frequency & Amount
-        if (user.payment_freq === 'Monthly' && monthlyFee > 0) {
-            monthsToAdd = Math.floor(amountPaid / monthlyFee);
-        } else if (user.payment_freq === 'Yearly' && yearlyFee > 0) {
-            const years = Math.floor(amountPaid / yearlyFee);
-            monthsToAdd = years * 12;
+        // --- YEARLY LOGIC: Calendar Year + 1 ---
+        if (user.payment_freq === 'Yearly' && yearlyFee > 0) {
+            const yearsPaid = Math.floor(amountPaid / yearlyFee);
+            if (yearsPaid > 0) {
+                isValid = true;
+                // Add years to the paid date
+                endDate.setFullYear(endDate.getFullYear() + yearsPaid);
+                // Snap to End of Year (Dec 31)
+                endDate.setMonth(11); 
+                endDate.setDate(31);
+            }
+        } 
+        // --- MONTHLY LOGIC: Calendar Month + 1 ---
+        else if (user.payment_freq === 'Monthly' && monthlyFee > 0) {
+            const monthsPaid = Math.floor(amountPaid / monthlyFee);
+            if (monthsPaid > 0) {
+                isValid = true;
+                // Add months
+                endDate.setMonth(endDate.getMonth() + monthsPaid);
+                // Snap to End of Month (Day 0 of next month is last day of previous)
+                endDate = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0); 
+            }
         }
 
-        if (monthsToAdd === 0) return <span style={{color:'#f59e0b', fontSize:'0.8em'}}>Partial Payment</span>;
+        if (!isValid) return <span style={{color:'#f59e0b', fontSize:'0.8em'}}>Partial Payment</span>;
 
-        // Calculate End Date
-        const endDate = new Date(paidDate);
-        endDate.setMonth(endDate.getMonth() + monthsToAdd);
-        
-        // Formatting & Color
+        // Check Expiry
+        const today = new Date();
+        const isExpired = endDate < today;
+        const color = isExpired ? '#ef4444' : '#10b981';
+
+        // Format YYYY-MM-DD
         const dateStr = endDate.toISOString().split('T')[0];
-        const isExpired = endDate < new Date();
-        const color = isExpired ? '#ef4444' : '#10b981'; // Red if expired, Green if valid
-
         return <span style={{color, fontWeight:'bold'}}>{dateStr}</span>;
     };
 
@@ -97,33 +111,23 @@ const Users = () => {
     };
 
     const handleMatch = async (log) => {
-        if(!window.confirm(`Link payment of ${log.amount} from ${log.sender} to ${matchUser.username}?`)) return;
+        if(!window.confirm(`Link payment of ${log.amount} to ${matchUser.username}?`)) return;
         await apiPost(`/users/${matchUser.id}/match_payment`, {
-            date: log.date,
-            raw_text: log.raw_text,
-            amount: log.amount,
-            sender: log.sender
+            date: log.date, raw_text: log.raw_text, amount: log.amount, sender: log.sender
         }, localStorage.getItem('admin_token'));
         setMatchUser(null);
         fetchData();
     };
 
     const handleUnmap = async (log) => {
-        if(!window.confirm(`Unlink this payment? It will become 'Unmapped'.`)) return;
-        await apiPost(`/users/unmap_payment`, {
-            date: log.date,
-            raw_text: log.raw_text
-        }, localStorage.getItem('admin_token'));
-        alert("Payment unmapped.");
+        if(!window.confirm(`Unlink this payment?`)) return;
+        await apiPost(`/users/unmap_payment`, { date: log.date, raw_text: log.raw_text }, localStorage.getItem('admin_token'));
         setMatchUser(null);
         fetchData();
     };
 
     const toggleStatus = async (user) => {
-        if (user.status === 'Active' && user.payment_freq === 'Exempt') {
-            alert("This user is Exempt and cannot be disabled.");
-            return;
-        }
+        if (user.status === 'Active' && user.payment_freq === 'Exempt') { alert("User is Exempt."); return; }
         const newStatus = user.status === 'Active' ? 'Disabled' : 'Active';
         if(!window.confirm(`Mark ${user.username} as ${newStatus}?`)) return;
         await apiPut(`/users/${user.id}`, { ...user, status: newStatus }, localStorage.getItem('admin_token'));
@@ -131,33 +135,25 @@ const Users = () => {
     };
 
     const handleImport = async (source) => {
-        if (!window.confirm(`Import from ${source}?`)) return;
         setLoading(true);
         try {
             const res = await apiPost(`/users/import/${source}`, {}, localStorage.getItem('admin_token'));
-            alert(res.message);
-            fetchData();
+            alert(res.message); fetchData();
         } catch (e) { alert('Import failed.'); }
         setLoading(false);
     };
 
     const handleRemap = async () => {
-        if (!window.confirm("Re-scan all unmapped payments against current users?")) return;
         setLoading(true);
         try {
             const res = await apiPost('/payments/remap', {}, localStorage.getItem('admin_token'));
-            alert(res.message);
-            fetchData();
+            alert(res.message); fetchData();
         } catch (e) { alert('Remap failed'); }
         setLoading(false);
     };
 
     const getFreqBadgeColor = (freq) => {
-        switch(freq) {
-            case 'Exempt': return '#eab308';
-            case 'Yearly': return '#8b5cf6';
-            default: return '#64748b';
-        }
+        switch(freq) { case 'Exempt': return '#eab308'; case 'Yearly': return '#8b5cf6'; default: return '#64748b'; }
     };
 
     return (
@@ -173,12 +169,9 @@ const Users = () => {
             {selectedIds.length > 0 && (
                 <div className="card" style={{backgroundColor: '#334155', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px', borderLeft: '4px solid #38bdf8'}}>
                     <span style={{fontWeight: 'bold', color: 'white'}}>{selectedIds.length} Selected</span>
-                    <div style={{height: '20px', width: '1px', backgroundColor: '#94a3b8'}}></div>
                     <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#eab308', color: 'black'}} onClick={() => handleBulkUpdate({payment_freq: 'Exempt'})}>Set Exempt</button>
                     <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#64748b'}} onClick={() => handleBulkUpdate({payment_freq: 'Monthly'})}>Set Monthly</button>
                     <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#8b5cf6'}} onClick={() => handleBulkUpdate({payment_freq: 'Yearly'})}>Set Yearly</button>
-                    <div style={{height: '20px', width: '1px', backgroundColor: '#94a3b8'}}></div>
-                    <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#10b981'}} onClick={() => handleBulkUpdate({status: 'Active'})}>Enable All</button>
                     <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#ef4444'}} onClick={() => handleBulkUpdate({status: 'Disabled'})}>Disable All</button>
                 </div>
             )}
@@ -187,30 +180,30 @@ const Users = () => {
                 <table className="table">
                     <thead>
                         <tr>
-                            <th style={{width: '40px', textAlign: 'center'}}><input type="checkbox" onChange={handleSelectAll} checked={users.length > 0 && selectedIds.length === users.length} style={{cursor: 'pointer'}} /></th>
+                            <th style={{width: '40px'}}><input type="checkbox" onChange={handleSelectAll} checked={users.length > 0 && selectedIds.length === users.length} /></th>
                             <th>Username</th>
                             <th>Full Name</th>
                             <th>Frequency</th>
                             <th>Status</th>
                             <th>Last Paid</th>
-                            <th>Paid Thru</th> {/* NEW COLUMN */}
+                            <th>Paid Thru</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {users.map(u => (
                             <tr key={u.id} style={{backgroundColor: selectedIds.includes(u.id) ? 'rgba(56, 189, 248, 0.1)' : 'transparent'}}>
-                                <td style={{textAlign: 'center'}}><input type="checkbox" checked={selectedIds.includes(u.id)} onChange={() => handleSelectRow(u.id)} style={{cursor: 'pointer'}} /></td>
+                                <td style={{textAlign: 'center'}}><input type="checkbox" checked={selectedIds.includes(u.id)} onChange={() => handleSelectRow(u.id)} /></td>
                                 <td style={{fontWeight:'bold'}}>{u.username}</td>
                                 <td>{u.full_name || '-'}</td>
                                 <td><span style={{fontSize:'0.75rem', padding:'2px 6px', borderRadius:'4px', backgroundColor: getFreqBadgeColor(u.payment_freq), color: u.payment_freq === 'Exempt' ? 'black' : 'white', fontWeight: 'bold'}}>{u.payment_freq || 'Exempt'}</span></td>
                                 <td><span style={{color: u.status === 'Active' ? '#10b981' : '#ef4444', fontWeight: 'bold'}}>{u.status}</span></td>
-                                <td>{u.last_paid || 'Never'}{u.last_payment_amount && <span style={{marginLeft: '8px', fontSize: '0.75rem', color: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '2px 5px', borderRadius: '4px'}}>({u.last_payment_amount})</span>}</td>
-                                <td>{calculatePaidThrough(u)}</td> {/* NEW CELL */}
+                                <td>{u.last_paid || 'Never'}{u.last_payment_amount && <span style={{marginLeft: '8px', fontSize: '0.75rem', color: '#10b981', padding: '2px 5px'}}>({u.last_payment_amount})</span>}</td>
+                                <td>{calculatePaidThrough(u)}</td>
                                 <td>
                                     <div className="flex" style={{gap:'5px'}}>
                                         <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem'}} onClick={() => setEditUser(u)}>Edit</button>
-                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: '#f59e0b'}} onClick={() => setMatchUser(u)}>Match Pay</button>
+                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: '#f59e0b'}} onClick={() => setMatchUser(u)}>Match</button>
                                         <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: u.status==='Active' ? '#ef4444' : '#10b981', opacity: u.payment_freq === 'Exempt' && u.status === 'Active' ? 0.5 : 1}} onClick={() => toggleStatus(u)}>{u.status==='Active' ? 'Disable' : 'Enable'}</button>
                                     </div>
                                 </td>
@@ -226,14 +219,10 @@ const Users = () => {
                         <h3>Edit User: {editUser.username}</h3>
                         <form onSubmit={handleSaveUser} style={{display:'grid', gap:'15px'}}>
                             <div><label className="small">Full Name</label><input className="input" value={editUser.full_name || ''} onChange={e=>setEditUser({...editUser, full_name: e.target.value})} /></div>
-                            <div><label className="small">AKA / Aliases</label><input className="input" value={editUser.aka || ''} onChange={e=>setEditUser({...editUser, aka: e.target.value})} /></div>
                             <div><label className="small">Email</label><input className="input" value={editUser.email || ''} onChange={e=>setEditUser({...editUser, email: e.target.value})} /></div>
+                            <div><label className="small">Last Paid</label><input className="input" type="date" value={editUser.last_paid || ''} onChange={e=>setEditUser({...editUser, last_paid: e.target.value})} /></div>
                             <div>
-                                <label className="small">Last Paid Date (YYYY-MM-DD)</label>
-                                <input className="input" type="date" value={editUser.last_paid || ''} onChange={e=>setEditUser({...editUser, last_paid: e.target.value})} />
-                            </div>
-                            <div>
-                                <label className="small">Payment Frequency</label>
+                                <label className="small">Frequency</label>
                                 <select className="input" value={editUser.payment_freq || 'Exempt'} onChange={e=>setEditUser({...editUser, payment_freq: e.target.value})}>
                                     <option value="Exempt">Exempt</option>
                                     <option value="Monthly">Monthly</option>
@@ -242,7 +231,7 @@ const Users = () => {
                             </div>
                             <div className="flex" style={{justifyContent:'flex-end'}}>
                                 <button type="button" className="button" style={{backgroundColor:'#64748b', marginRight:'10px'}} onClick={()=>setEditUser(null)}>Cancel</button>
-                                <button type="submit" className="button">Save Changes</button>
+                                <button type="submit" className="button">Save</button>
                             </div>
                         </form>
                     </div>
@@ -253,7 +242,6 @@ const Users = () => {
                 <div style={modalStyle}>
                     <div className="card" style={{minWidth: '600px', maxHeight: '80vh', overflowY: 'auto', margin: 'auto'}}>
                         <h3>Match Payment to {matchUser.username}</h3>
-                        <p className="small">Select a transaction below:</p>
                         <table className="table" style={{marginTop:'15px'}}>
                             <thead><tr><th>Date</th><th>Sender</th><th>Amount</th><th>Action</th></tr></thead>
                             <tbody>
@@ -262,24 +250,12 @@ const Users = () => {
                                         <td>{log.date}</td>
                                         <td>{log.sender}</td>
                                         <td>{log.amount}</td>
-                                        <td>
-                                            {log.status === 'Matched' ? (
-                                                <div className="flex" style={{gap: '5px'}}>
-                                                    <span className="small" style={{color: '#10b981', alignSelf:'center'}}>{log.mapped_user}</span>
-                                                    <button className="button" style={{padding:'2px 8px', fontSize:'0.7rem', backgroundColor: '#64748b'}} onClick={() => handleUnmap(log)}>Unmap</button>
-                                                </div>
-                                            ) : (
-                                                <button className="button" style={{padding:'2px 8px', fontSize:'0.7rem'}} onClick={() => handleMatch(log)}>Select</button>
-                                            )}
-                                        </td>
+                                        <td>{log.status === 'Matched' ? <button className="button" style={{padding:'2px', backgroundColor:'#64748b'}} onClick={() => handleUnmap(log)}>Unmap</button> : <button className="button" style={{padding:'2px'}} onClick={() => handleMatch(log)}>Select</button>}</td>
                                     </tr>
                                 ))}
-                                {logs.length === 0 && <tr><td colSpan="4" style={{textAlign:'center'}}>No payments found.</td></tr>}
                             </tbody>
                         </table>
-                        <div style={{marginTop:'20px', textAlign:'right'}}>
-                            <button className="button" style={{backgroundColor:'#64748b'}} onClick={()=>setMatchUser(null)}>Cancel</button>
-                        </div>
+                        <button className="button" style={{backgroundColor:'#64748b', marginTop:'15px'}} onClick={()=>setMatchUser(null)}>Close</button>
                     </div>
                 </div>
             )}
