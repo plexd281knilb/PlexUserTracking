@@ -37,7 +37,8 @@ const Settings = () => {
                 ]);
                 setSettings(prev => ({ ...prev, ...sets }));
                 
-                const plexServers = srvs.plex || [];
+                // Filter out bad server entries (Ghost Box Fix)
+                const plexServers = (srvs.plex || []).filter(s => s.name && s.name.trim() !== "");
                 setServers(plexServers);
 
                 const libMap = {};
@@ -95,6 +96,9 @@ const Settings = () => {
             {/* 1. FINANCIALS & SCANNING */}
             <div className="card" style={{marginBottom:'20px'}}>
                 <h3>Financials & Scanning</h3>
+                <p className="small" style={{color:'var(--text-muted)', marginBottom:'15px'}}>
+                    Set standard dues to calculate "Paid Thru" dates.
+                </p>
                 <div className="flex" style={{gap:'20px', marginBottom:'15px'}}>
                     <div style={{flex:1}}>
                         <label className="small">Monthly Fee ($)</label>
@@ -169,6 +173,7 @@ const Settings = () => {
                     </div>
                 </div>
                 
+                <p className="small" style={{color:'var(--text-muted)', marginBottom:'10px'}}>Select libraries to share automatically.</p>
                 {servers.map(server => (
                     <div key={server.id} style={{marginBottom: '10px', padding: '10px', border: '1px solid var(--border)', borderRadius: '8px'}}>
                         <strong>{server.name}</strong>
