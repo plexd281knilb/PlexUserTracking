@@ -56,7 +56,6 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
         
     raw_text = f"{sender_name} sent {amount_str}"
     log_entry = None
-    is_new_entry = False
     
     for log in existing_logs:
         if log.get('raw_text') == raw_text and log.get('date') == date_str:
@@ -64,7 +63,6 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
             break
     
     if not log_entry:
-        is_new_entry = True
         log_entry = {
             "date": date_str,
             "service": service_name,
@@ -109,7 +107,7 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
         save_data('payment_logs', existing_logs)
         save_users(users)
         
-    return is_new_entry
+    return match_found
 
 def remap_existing_payments():
     users = load_users()
@@ -124,7 +122,7 @@ def remap_existing_payments():
     save_users(users)
     return count
 
-# --- PLEX LOGIC ---
+# --- PLEX LOGIC (FIXED) ---
 def modify_plex_access(user, enable=True):
     settings = load_settings()
     
@@ -137,12 +135,11 @@ def modify_plex_access(user, enable=True):
     if not enable and not auto_ban: return ["Skipped: Auto-Ban is disabled"]
     if enable and not auto_invite: return ["Skipped: Auto-Invite is disabled"]
 
-    # Parse Config: Map ServerName -> [LibraryID, LibraryID]
+    # Parse Config
     raw_config = settings.get('default_library_ids', [])
     server_libs_map = {} 
     
     for item in raw_config:
-        # Expected format: "ServerName__LibraryID"
         if "__" in item:
             srv_name, lib_id = item.split("__", 1)
             if srv_name not in server_libs_map: 
@@ -160,6 +157,7 @@ def modify_plex_access(user, enable=True):
         token = server['token']
         headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
         try:
+            # 1. Get Machine ID
             res = requests.get('https://plex.tv/api/resources?includeHttps=1', headers=headers, timeout=5)
             machine_id = None
             if res.status_code == 200:
@@ -176,28 +174,33 @@ def modify_plex_access(user, enable=True):
                 results.append(f"{server['name']}: Could not find Machine ID")
                 continue
 
-            r = requests.get('https://plex.tv/api/users', headers=headers)
+            # 2. Check for Existing User (Needed for Disable, Helpful for Enable)
             plex_user_id = None
-            if r.status_code == 200:
-                root = ET.fromstring(r.content)
-                for u in root.findall('User'):
-                    if u.get('email', '').lower() == user['email'].lower() or \
-                       u.get('username', '').lower() == user.get('username', '').lower():
-                        plex_user_id = u.get('id'); break
+            try:
+                r = requests.get('https://plex.tv/api/users', headers=headers)
+                if r.status_code == 200:
+                    root = ET.fromstring(r.content)
+                    for u in root.findall('User'):
+                        if u.get('email', '').lower() == user['email'].lower() or \
+                           u.get('username', '').lower() == user.get('username', '').lower():
+                            plex_user_id = u.get('id'); break
+            except: pass
             
             if not enable:
+                # --- DISABLE LOGIC ---
                 if plex_user_id:
                     requests.delete(f"https://plex.tv/api/friends/{plex_user_id}", headers=headers)
                     results.append(f"{server['name']}: Access Revoked")
                 else:
                     results.append(f"{server['name']}: User not found (Already disabled?)")
             else:
-                # ENABLE Logic
+                # --- ENABLE LOGIC ---
                 lib_ids = server_libs_map.get(server['name'], [])
                 if not lib_ids:
                     results.append(f"{server['name']}: No libraries configured")
                     continue
 
+                # Invite payload (Works even if user is not yet a friend)
                 payload = { 
                     "server_id": machine_id, 
                     "shared_server": { 
@@ -263,14 +266,10 @@ def fetch_venmo_payments():
                         if process_payment(users, match.group(1).strip(), match.group(2), msg["Date"], 'Venmo'): payment_count += 1
             acc['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         except Exception as e: errors.append(str(e))
-        # FIXED SYNTAX HERE
         finally: 
             if mail:
-                try:
-                    mail.logout()
-                except:
-                    pass
-    
+                try: mail.logout()
+                except: pass
     save_users(users)
     save_payment_accounts('venmo', accounts)
     return {"count": payment_count, "errors": errors}
@@ -306,14 +305,10 @@ def fetch_paypal_payments():
                         if process_payment(users, match.group(1).strip(), match.group(2), msg["Date"], 'PayPal'): payment_count += 1
             acc['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         except Exception as e: errors.append(str(e))
-        # FIXED SYNTAX HERE
         finally: 
             if mail:
-                try:
-                    mail.logout()
-                except:
-                    pass
-    
+                try: mail.logout()
+                except: pass
     save_users(users)
     save_payment_accounts('paypal', accounts)
     return {"count": payment_count, "errors": errors}
@@ -349,14 +344,10 @@ def fetch_zelle_payments():
                         if process_payment(users, match.group(2).strip(), match.group(1), msg["Date"], 'Zelle'): payment_count += 1
             acc['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         except Exception as e: errors.append(str(e))
-        # FIXED SYNTAX HERE
         finally: 
             if mail:
-                try:
-                    mail.logout()
-                except:
-                    pass
-    
+                try: mail.logout()
+                except: pass
     save_users(users)
     save_payment_accounts('zelle', accounts)
     return {"count": payment_count, "errors": errors}
