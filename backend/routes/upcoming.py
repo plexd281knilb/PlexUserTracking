@@ -8,8 +8,8 @@ upcoming_bp = Blueprint('upcoming', __name__, url_prefix='/api/upcoming')
 def calculate_dates(user, settings):
     if user.get('payment_freq') == 'Exempt': return None
     if not user.get('last_paid') or user['last_paid'] == 'Never': 
-        # Default for active users with no history: 12/31/2025 (as requested previously)
-        if user.get('status') == 'Active':
+        # Default for Active/Pending users
+        if user.get('status') in ['Active', 'Pending']:
             paid_thru = datetime(2025, 12, 31)
         else:
             return None
@@ -27,27 +27,21 @@ def calculate_dates(user, settings):
             if user['payment_freq'] == 'Yearly' and fee_yearly > 0:
                 years = int(amount // fee_yearly)
                 if years > 0:
-                    # Add years, then snap to Dec 31
                     paid_thru = paid_thru.replace(year=paid_thru.year + years)
                     paid_thru = paid_thru.replace(month=12, day=31)
                     
             elif user['payment_freq'] == 'Monthly' and fee_monthly > 0:
                 months = int(amount // fee_monthly)
                 if months > 0:
-                    # Add months logic
                     year = paid_thru.year + ((paid_thru.month + months - 1) // 12)
                     month = (paid_thru.month + months - 1) % 12 + 1
-                    # Snap to last day of that month
                     last_day = calendar.monthrange(year, month)[1]
                     paid_thru = datetime(year, month, last_day)
         except:
             return None
 
     # Calculate Action Dates
-    # Notification: 3 days BEFORE expiry (Adjustable logic)
     notif_date = paid_thru - timedelta(days=3)
-    
-    # Disabled: 1 day AFTER expiry
     disabled_date = paid_thru + timedelta(days=1)
     
     return {
@@ -73,21 +67,15 @@ def get_upcoming():
     results = []
     
     for user in users:
-        if user.get('status') != 'Active': continue
+        # Include Active and Pending in projections
+        if user.get('status') not in ['Active', 'Pending']: continue
         
         dates = calculate_dates(user, settings)
         if not dates: continue
         
-        # Check if ANY event falls in the window
         in_range = False
-        
-        # Check Notification Date
-        if start_date <= dates['notification'] <= end_date:
-            in_range = True
-            
-        # Check Disabled Date
-        if start_date <= dates['disabled'] <= end_date:
-            in_range = True
+        if start_date <= dates['notification'] <= end_date: in_range = True
+        if start_date <= dates['disabled'] <= end_date: in_range = True
             
         if in_range:
             results.append({
@@ -96,11 +84,8 @@ def get_upcoming():
                 "freq": user.get('payment_freq', '-'),
                 "notif_date": dates['notification'].strftime('%Y-%m-%d'),
                 "disabled_date": dates['disabled'].strftime('%Y-%m-%d'),
-                # Sorting helper
                 "sort_date": dates['disabled'].strftime('%Y-%m-%d')
             })
             
-    # Sort by the disable date
     results.sort(key=lambda x: x['sort_date'])
-    
     return jsonify(results)

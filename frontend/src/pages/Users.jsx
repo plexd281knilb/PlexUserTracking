@@ -32,9 +32,13 @@ const Users = () => {
     const calculatePaidThrough = (user) => {
         if (user.payment_freq === 'Exempt') return <span style={{color:'#10b981', fontWeight:'bold'}}>Forever</span>;
         
-        // Default for Active users with no payment history: 12/31/2025
+        // Default for Active/Pending users with no history: 12/31/2025
         if ((!user.last_paid || user.last_paid === 'Never')) {
-            return user.status === 'Active' ? <span style={{color:'#f59e0b'}}>12/31/2025 (Default)</span> : <span style={{color:'#94a3b8'}}>-</span>;
+            // FIXED: Now includes 'Pending' users in the default date
+            if (user.status === 'Active' || user.status === 'Pending') {
+                return <span style={{color:'#f59e0b'}}>2025-12-31 (Default)</span>;
+            }
+            return <span style={{color:'#94a3b8'}}>-</span>;
         }
 
         const paidDate = new Date(user.last_paid);
@@ -52,11 +56,9 @@ const Users = () => {
             const yearsPaid = Math.floor(amountPaid / yearlyFee);
             if (yearsPaid > 0) {
                 isValid = true;
-                // Add years to the paid date
                 endDate.setFullYear(endDate.getFullYear() + yearsPaid);
-                // Snap to End of Year (Dec 31)
-                endDate.setMonth(11); 
-                endDate.setDate(31);
+                endDate.setMonth(11); // Dec
+                endDate.setDate(31);  // 31st
             }
         } 
         // --- MONTHLY LOGIC: Calendar Month + 1 ---
@@ -64,21 +66,18 @@ const Users = () => {
             const monthsPaid = Math.floor(amountPaid / monthlyFee);
             if (monthsPaid > 0) {
                 isValid = true;
-                // Add months
                 endDate.setMonth(endDate.getMonth() + monthsPaid);
-                // Snap to End of Month (Day 0 of next month is last day of previous)
+                // Snap to End of Month
                 endDate = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0); 
             }
         }
 
         if (!isValid) return <span style={{color:'#f59e0b', fontSize:'0.8em'}}>Partial Payment</span>;
 
-        // Check Expiry
         const today = new Date();
         const isExpired = endDate < today;
         const color = isExpired ? '#ef4444' : '#10b981';
 
-        // Format YYYY-MM-DD
         const dateStr = endDate.toISOString().split('T')[0];
         return <span style={{color, fontWeight:'bold'}}>{dateStr}</span>;
     };
