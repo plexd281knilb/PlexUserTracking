@@ -2,12 +2,11 @@
 import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
-import './App.css';
+import './styles.css'; // FIXED: Pointing to your existing CSS file
 
 export const ThemeContext = createContext();
 
 function App() {
-    // Load theme from localStorage or default to true (Dark Mode)
     const [isDarkMode, setIsDarkMode] = useState(() => {
         const saved = localStorage.getItem('isDarkMode');
         return saved !== null ? JSON.parse(saved) : true;
@@ -15,25 +14,26 @@ function App() {
 
     useEffect(() => {
         localStorage.setItem('isDarkMode', JSON.stringify(isDarkMode));
+        // You can add .light-mode styles to your styles.css later if needed
         document.body.className = isDarkMode ? 'dark-mode' : 'light-mode';
     }, [isDarkMode]);
 
     return (
         <ThemeContext.Provider value={{ isDarkMode, setIsDarkMode }}>
             <Router>
-                <div className="app-container">
+                <div className="app-root"> {/* Matched to styles.css */}
                     <nav className="sidebar">
-                        <div className="brand">PLEX TRACKER</div>
-                        <div className="nav-links">
-                            <NavLink to="/users" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
+                        <h2>PLEX TRACKER</h2>
+                        <div className="nav-group">
+                            <NavLink to="/users" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
                                 👥 Users
                             </NavLink>
-                            <NavLink to="/settings" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
+                            <NavLink to="/settings" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
                                 ⚙️ Settings
                             </NavLink>
                         </div>
                         
-                        <div style={{ marginTop: 'auto', padding: '20px' }}>
+                        <div style={{ marginTop: 'auto' }}>
                             <button 
                                 className="button" 
                                 style={{ width: '100%', fontSize: '0.8rem', backgroundColor: 'var(--bg-card)' }}
@@ -44,7 +44,7 @@ function App() {
                         </div>
                     </nav>
 
-                    <main className="content">
+                    <main className="main"> {/* Matched to styles.css */}
                         <Routes>
                             <Route path="/" element={<Users />} />
                             <Route path="/users" element={<Users />} />
