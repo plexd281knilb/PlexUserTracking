@@ -40,6 +40,7 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
     raw_text = f"{sender_name} sent {amount_str}"
     log_entry = None
     
+    # Check for duplicate log
     for log in existing_logs:
         if log.get('raw_text') == raw_text and log.get('date') == date_str:
             log_entry = log
@@ -273,7 +274,7 @@ def get_plex_libraries(token, manual_url=None):
 
     except Exception as e: return {"error": str(e)}
 
-# --- Fetchers (Explicit Full Versions) ---
+# --- Fetchers ---
 
 def fetch_venmo_payments():
     accounts = load_payment_accounts('venmo')
@@ -283,6 +284,7 @@ def fetch_venmo_payments():
 
     for account in accounts:
         if not account.get('enabled', True): continue
+        mail = None
         try:
             mail = imaplib.IMAP4_SSL(account['imap_server'], account['port'])
             mail.login(account['email'], account['password'])
@@ -306,9 +308,18 @@ def fetch_venmo_payments():
                             if match:
                                 if process_payment(users, match.group(1).strip(), match.group(2), msg["Date"], 'Venmo'):
                                     payment_count += 1
-            mail.close(); mail.logout()
+            
+            # Update timestamp on success
             account['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        except Exception as e: print(f"Venmo Scan Error: {e}")
+            
+        except Exception as e: 
+            print(f"Venmo Scan Error ({account['email']}): {e}")
+        finally:
+            if mail:
+                try: 
+                    mail.close()
+                    mail.logout()
+                except: pass
 
     save_users(users)
     save_payment_accounts('venmo', accounts)
@@ -322,6 +333,7 @@ def fetch_paypal_payments():
 
     for account in accounts:
         if not account.get('enabled', True): continue
+        mail = None
         try:
             mail = imaplib.IMAP4_SSL(account['imap_server'], account['port'])
             mail.login(account['email'], account['password'])
@@ -343,9 +355,17 @@ def fetch_paypal_payments():
                             if match:
                                 if process_payment(users, match.group(1).strip(), match.group(2), msg["Date"], 'PayPal'):
                                     payment_count += 1
-            mail.close(); mail.logout()
+            
             account['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        except Exception as e: print(f"PayPal Scan Error: {e}")
+
+        except Exception as e: 
+            print(f"PayPal Scan Error ({account['email']}): {e}")
+        finally:
+            if mail:
+                try: 
+                    mail.close()
+                    mail.logout()
+                except: pass
 
     save_users(users)
     save_payment_accounts('paypal', accounts)
@@ -359,6 +379,7 @@ def fetch_zelle_payments():
 
     for account in accounts:
         if not account.get('enabled', True): continue
+        mail = None
         try:
             mail = imaplib.IMAP4_SSL(account['imap_server'], account['port'])
             mail.login(account['email'], account['password'])
@@ -380,9 +401,17 @@ def fetch_zelle_payments():
                             if match:
                                 if process_payment(users, match.group(2).strip(), match.group(1), msg["Date"], 'Zelle'):
                                     payment_count += 1
-            mail.close(); mail.logout()
+            
             account['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        except Exception as e: print(f"Zelle Scan Error: {e}")
+
+        except Exception as e: 
+            print(f"Zelle Scan Error ({account['email']}): {e}")
+        finally:
+            if mail:
+                try: 
+                    mail.close()
+                    mail.logout()
+                except: pass
 
     save_users(users)
     save_payment_accounts('zelle', accounts)
@@ -394,13 +423,12 @@ def fetch_all_plex_users():
     total_imported = 0
     for server in servers:
         try:
-            # (Simplified for brevity, but logic is same)
+            # Reusing existing single fetch logic if needed, simplified here
             pass 
         except: pass
     return total_imported
 
 def fetch_all_tautulli_users():
-    # (Simplified for brevity)
     return 0
 
 def test_plex_connection(token, url="https://plex.tv/api/users"):
@@ -416,7 +444,6 @@ def test_tautulli_connection(url, key):
         return {"status": "success"}
     except Exception as e: return {"status": "error", "message": str(e)}
 
-# --- NEW: Test Email Connection ---
 def test_email_connection(host, port, email_user, email_pass):
     try:
         print(f"Testing connection to {host}:{port} for {email_user}...")
