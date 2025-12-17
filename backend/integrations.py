@@ -19,16 +19,35 @@ def get_email_body(msg):
         return msg.get_payload(decode=True).decode('utf-8', errors='ignore')
     return ""
 
+def get_email_subject(msg):
+    """Decodes the email subject, handling RFC 2047 encoding."""
+    subject_header = msg["Subject"]
+    if not subject_header:
+        return ""
+    decoded_list = decode_header(subject_header)
+    subject = ""
+    for token, encoding in decoded_list:
+        if isinstance(token, bytes):
+            if encoding:
+                subject += token.decode(encoding, errors="ignore")
+            else:
+                subject += token.decode("utf-8", errors="ignore")
+        else:
+            subject += str(token)
+    return subject
+
 # --- Payment Processing Logic ---
 def process_payment(users, sender_name, amount_str, date_obj, service_name, existing_logs=None, save_db=True):
     # FIXED: Date Normalization to YYYY-MM-DD
     date_str = datetime.now().strftime('%Y-%m-%d')
     try:
         if isinstance(date_obj, str):
+            # Try parsing email date (RFC 2822)
             date_tuple = email.utils.parsedate_tz(date_obj)
             if date_tuple:
                 local_date = datetime.fromtimestamp(email.utils.mktime_tz(date_tuple))
                 date_str = local_date.strftime('%Y-%m-%d')
+            # Check if already YYYY-MM-DD
             elif re.match(r"\d{4}-\d{2}-\d{2}", date_obj):
                 date_str = date_obj
         else:
@@ -211,11 +230,12 @@ def get_plex_libraries(token, manual_url=None):
         return {"error": "No server reachable"}
     except Exception as e: return {"error": str(e)}
 
-# --- FETCHERS ---
+# --- FETCHERS (Explicit Logic) ---
 
 def fetch_venmo_payments():
     settings = load_settings()
     search_term = settings.get('venmo_search_term', 'paid you')
+    
     accounts = load_payment_accounts('venmo')
     users = load_users()
     payment_count = 0
@@ -240,8 +260,9 @@ def fetch_venmo_payments():
                 for e_id in messages[0].split()[-50:]:
                     _, msg_data = mail.fetch(e_id, '(RFC822)')
                     msg = email.message_from_bytes(msg_data[0][1])
-                    subject = decode_header(msg["Subject"])[0][0]
-                    if isinstance(subject, bytes): subject = subject.decode()
+                    
+                    # USE NEW HELPER
+                    subject = get_email_subject(msg)
 
                     match = venmo_pattern.search(subject)
                     if match:
@@ -271,7 +292,6 @@ def fetch_paypal_payments():
     payment_count = 0
     errors = []
     
-    # Regex for "Name sent you $X.XX USD"
     paypal_pattern = re.compile(r"([A-Za-z ]+) sent you (\$\d+\.\d{2}) USD")
 
     for account in accounts:
@@ -291,8 +311,7 @@ def fetch_paypal_payments():
                     msg = email.message_from_bytes(msg_data[0][1])
                     
                     # --- FIXED: Check Subject First ---
-                    subject_val = decode_header(msg["Subject"])[0][0]
-                    if isinstance(subject_val, bytes): subject_val = subject_val.decode()
+                    subject_val = get_email_subject(msg)
                     
                     # Try matching subject
                     match = paypal_pattern.search(subject_val)
@@ -329,7 +348,6 @@ def fetch_zelle_payments():
     payment_count = 0
     errors = []
     
-    # Regex: "received $X.XX from Name"
     zelle_pattern = re.compile(r"received (\$\d+\.\d{2}) from ([A-Za-z ]+)")
 
     for account in accounts:
@@ -349,8 +367,7 @@ def fetch_zelle_payments():
                     msg = email.message_from_bytes(msg_data[0][1])
                     
                     # --- FIXED: Check Subject First ---
-                    subject_val = decode_header(msg["Subject"])[0][0]
-                    if isinstance(subject_val, bytes): subject_val = subject_val.decode()
+                    subject_val = get_email_subject(msg)
                     
                     match = zelle_pattern.search(subject_val)
                     if not match:
@@ -358,7 +375,7 @@ def fetch_zelle_payments():
                         match = zelle_pattern.search(body)
                     
                     if match:
-                        # Zelle regex groups: (1) is Amount, (2) is Name
+                        # Zelle regex usually: group 2 is name, group 1 is amount
                         if process_payment(users, match.group(2).strip(), match.group(1), msg["Date"], 'Zelle'):
                             payment_count += 1
             
