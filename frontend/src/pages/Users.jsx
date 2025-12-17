@@ -1,9 +1,10 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { apiGet, apiPost, apiPut, apiDelete } from 'api';
+import { apiGet, apiPost, apiPut } from 'api';
 
 const Users = () => {
     const [users, setUsers] = useState([]);
     const [logs, setLogs] = useState([]);
+    const [settings, setSettings] = useState({});
     const [loading, setLoading] = useState(true);
     
     const [selectedIds, setSelectedIds] = useState([]);
@@ -13,17 +14,60 @@ const Users = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [uData, lData] = await Promise.all([
+            // Fetch Users, Logs, AND Settings (for fee calculation)
+            const [uData, lData, sData] = await Promise.all([
                 apiGet('/users'),
-                apiGet('/payment_logs')
+                apiGet('/payment_logs'),
+                apiGet('/settings')
             ]);
             setUsers(uData);
             setLogs(lData); 
+            setSettings(sData || {});
         } catch (e) { console.error(e); } 
         finally { setLoading(false); }
     };
 
     useEffect(() => { fetchData(); }, []);
+
+    // --- HELPER: Calculate Paid Through Date ---
+    const calculatePaidThrough = (user) => {
+        if (user.payment_freq === 'Exempt') return <span style={{color:'#10b981', fontWeight:'bold'}}>Forever</span>;
+        if (!user.last_paid || user.last_paid === 'Never') return <span style={{color:'#94a3b8'}}>-</span>;
+
+        // Parse Date
+        const paidDate = new Date(user.last_paid);
+        if (isNaN(paidDate.getTime())) return <span style={{color:'#94a3b8'}}>Invalid Date</span>;
+
+        // Parse Amount (Remove '$' and parse float)
+        const amountPaid = parseFloat((user.last_payment_amount || '0').replace(/[^0-9.]/g, ''));
+        
+        // Get Fees from Settings
+        const monthlyFee = parseFloat(settings.fee_monthly || 0);
+        const yearlyFee = parseFloat(settings.fee_yearly || 0);
+
+        let monthsToAdd = 0;
+
+        // Calculate Duration based on Frequency & Amount
+        if (user.payment_freq === 'Monthly' && monthlyFee > 0) {
+            monthsToAdd = Math.floor(amountPaid / monthlyFee);
+        } else if (user.payment_freq === 'Yearly' && yearlyFee > 0) {
+            const years = Math.floor(amountPaid / yearlyFee);
+            monthsToAdd = years * 12;
+        }
+
+        if (monthsToAdd === 0) return <span style={{color:'#f59e0b', fontSize:'0.8em'}}>Partial Payment</span>;
+
+        // Calculate End Date
+        const endDate = new Date(paidDate);
+        endDate.setMonth(endDate.getMonth() + monthsToAdd);
+        
+        // Formatting & Color
+        const dateStr = endDate.toISOString().split('T')[0];
+        const isExpired = endDate < new Date();
+        const color = isExpired ? '#ef4444' : '#10b981'; // Red if expired, Green if valid
+
+        return <span style={{color, fontWeight:'bold'}}>{dateStr}</span>;
+    };
 
     // --- HANDLERS ---
     const handleSelectAll = (e) => {
@@ -45,25 +89,10 @@ const Users = () => {
         } catch (e) { alert('Bulk update failed.'); }
     };
 
-    const handleBulkDelete = async () => {
-        if (!window.confirm(`DELETE ${selectedIds.length} users? This cannot be undone.`)) return;
-        try {
-            await apiPost('/users/bulk/delete', { ids: selectedIds }, localStorage.getItem('admin_token'));
-            setSelectedIds([]); 
-            fetchData(); 
-        } catch (e) { alert('Bulk delete failed.'); }
-    };
-
     const handleSaveUser = async (e) => {
         e.preventDefault();
         await apiPut(`/users/${editUser.id}`, editUser, localStorage.getItem('admin_token'));
         setEditUser(null);
-        fetchData();
-    };
-
-    const handleDeleteUser = async (id) => {
-        if (!window.confirm("Delete this user? You can re-import them from Plex.")) return;
-        await apiDelete(`/users/${id}`, localStorage.getItem('admin_token'));
         fetchData();
     };
 
@@ -80,11 +109,12 @@ const Users = () => {
     };
 
     const handleUnmap = async (log) => {
-        if(!window.confirm(`Unlink this payment?`)) return;
+        if(!window.confirm(`Unlink this payment? It will become 'Unmapped'.`)) return;
         await apiPost(`/users/unmap_payment`, {
             date: log.date,
             raw_text: log.raw_text
         }, localStorage.getItem('admin_token'));
+        alert("Payment unmapped.");
         setMatchUser(null);
         fetchData();
     };
@@ -100,10 +130,11 @@ const Users = () => {
         fetchData();
     };
 
-    const handleImportPlex = async () => {
+    const handleImport = async (source) => {
+        if (!window.confirm(`Import from ${source}?`)) return;
         setLoading(true);
         try {
-            const res = await apiPost(`/users/import/plex`, {}, localStorage.getItem('admin_token'));
+            const res = await apiPost(`/users/import/${source}`, {}, localStorage.getItem('admin_token'));
             alert(res.message);
             fetchData();
         } catch (e) { alert('Import failed.'); }
@@ -135,7 +166,7 @@ const Users = () => {
                 <h1>User Management</h1>
                 <div className="flex" style={{gap: '10px'}}>
                     <button className="button" style={{backgroundColor: '#64748b'}} onClick={handleRemap}>🔄 Re-Map Payments</button>
-                    <button className="button" onClick={handleImportPlex}>Import Plex Users</button>
+                    <button className="button" onClick={() => handleImport('plex')}>Import Plex</button>
                 </div>
             </div>
 
@@ -147,10 +178,8 @@ const Users = () => {
                     <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#64748b'}} onClick={() => handleBulkUpdate({payment_freq: 'Monthly'})}>Set Monthly</button>
                     <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#8b5cf6'}} onClick={() => handleBulkUpdate({payment_freq: 'Yearly'})}>Set Yearly</button>
                     <div style={{height: '20px', width: '1px', backgroundColor: '#94a3b8'}}></div>
-                    <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#10b981'}} onClick={() => handleBulkUpdate({status: 'Active'})}>Enable</button>
-                    <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#ef4444'}} onClick={() => handleBulkUpdate({status: 'Disabled'})}>Disable</button>
-                    <div style={{height: '20px', width: '1px', backgroundColor: '#94a3b8'}}></div>
-                    <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#ef4444'}} onClick={handleBulkDelete}>Delete Selected</button>
+                    <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#10b981'}} onClick={() => handleBulkUpdate({status: 'Active'})}>Enable All</button>
+                    <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#ef4444'}} onClick={() => handleBulkUpdate({status: 'Disabled'})}>Disable All</button>
                 </div>
             )}
 
@@ -162,9 +191,10 @@ const Users = () => {
                             <th>Username</th>
                             <th>Full Name</th>
                             <th>Frequency</th>
-                            <th>Status (Access)</th>
-                            <th>Last Paid (Amount)</th>
-                            <th style={{width: '220px'}}>Actions</th>
+                            <th>Status</th>
+                            <th>Last Paid</th>
+                            <th>Paid Thru</th> {/* NEW COLUMN */}
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -176,12 +206,12 @@ const Users = () => {
                                 <td><span style={{fontSize:'0.75rem', padding:'2px 6px', borderRadius:'4px', backgroundColor: getFreqBadgeColor(u.payment_freq), color: u.payment_freq === 'Exempt' ? 'black' : 'white', fontWeight: 'bold'}}>{u.payment_freq || 'Exempt'}</span></td>
                                 <td><span style={{color: u.status === 'Active' ? '#10b981' : '#ef4444', fontWeight: 'bold'}}>{u.status}</span></td>
                                 <td>{u.last_paid || 'Never'}{u.last_payment_amount && <span style={{marginLeft: '8px', fontSize: '0.75rem', color: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '2px 5px', borderRadius: '4px'}}>({u.last_payment_amount})</span>}</td>
+                                <td>{calculatePaidThrough(u)}</td> {/* NEW CELL */}
                                 <td>
                                     <div className="flex" style={{gap:'5px'}}>
                                         <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem'}} onClick={() => setEditUser(u)}>Edit</button>
-                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: '#f59e0b'}} onClick={() => setMatchUser(u)}>Match</button>
+                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: '#f59e0b'}} onClick={() => setMatchUser(u)}>Match Pay</button>
                                         <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: u.status==='Active' ? '#ef4444' : '#10b981', opacity: u.payment_freq === 'Exempt' && u.status === 'Active' ? 0.5 : 1}} onClick={() => toggleStatus(u)}>{u.status==='Active' ? 'Disable' : 'Enable'}</button>
-                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: '#dc2626'}} onClick={() => handleDeleteUser(u.id)}>Delete</button>
                                     </div>
                                 </td>
                             </tr>
@@ -190,7 +220,6 @@ const Users = () => {
                 </table>
             </div>
 
-            {/* Edit Modal (Keeping Same) */}
             {editUser && (
                 <div style={modalStyle}>
                     <div className="card" style={{minWidth: '400px', margin: 'auto'}}>
@@ -220,7 +249,6 @@ const Users = () => {
                 </div>
             )}
 
-            {/* Match Modal (Keeping Same) */}
             {matchUser && (
                 <div style={modalStyle}>
                     <div className="card" style={{minWidth: '600px', maxHeight: '80vh', overflowY: 'auto', margin: 'auto'}}>

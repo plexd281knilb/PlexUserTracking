@@ -7,7 +7,10 @@ const Settings = () => {
         fee_yearly: "0.00",
         plex_auto_ban: true,
         plex_auto_invite: true,
-        default_library_ids: [] // Format: "ServerName__LibraryID"
+        default_library_ids: [], // Format: "ServerName__LibraryID"
+        venmo_search_term: '',
+        paypal_search_term: '',
+        zelle_search_term: ''
     });
     const [servers, setServers] = useState([]);
     const [libraries, setLibraries] = useState({}); // { "ServerName": [ {id, title, type}, ... ] }
@@ -21,6 +24,8 @@ const Settings = () => {
                     apiGet('/settings'),
                     apiGet('/settings/servers')
                 ]);
+                
+                // Merge loaded settings with defaults to ensure fields exist
                 setSettings(prev => ({ ...prev, ...sets }));
                 
                 const plexServers = srvs.plex || [];
@@ -44,7 +49,20 @@ const Settings = () => {
         loadData();
     }, []);
 
-    const handleCheckbox = (serverName, libId) => {
+    // Handle generic text/number inputs
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setSettings(prev => ({ ...prev, [name]: value }));
+    };
+
+    // Handle checkboxes for booleans
+    const handleToggleChange = (e) => {
+        const { name, checked } = e.target;
+        setSettings(prev => ({ ...prev, [name]: checked }));
+    };
+
+    // Handle Library Selection (Unique ID logic)
+    const handleLibraryCheckbox = (serverName, libId) => {
         // Unique Key: ServerName__LibraryID to prevent linking unrelated servers
         const uniqueId = `${serverName}__${libId}`;
         const current = settings.default_library_ids || [];
@@ -76,15 +94,16 @@ const Settings = () => {
             <div className="card" style={{marginBottom:'20px'}}>
                 <h3>Subscription Costs</h3>
                 <p className="small" style={{color:'var(--text-muted)', marginBottom:'10px'}}>
-                    Set the standard amount users are expected to pay.
+                    Set the standard amount users are expected to pay. This helps calculate "Paid Thru" dates.
                 </p>
                 <div className="flex" style={{gap:'20px'}}>
                     <div style={{flex:1}}>
                         <label className="small">Monthly Fee ($)</label>
                         <input 
                             className="input" 
+                            name="fee_monthly"
                             value={settings.fee_monthly} 
-                            onChange={e=>setSettings({...settings, fee_monthly: e.target.value})} 
+                            onChange={handleInputChange} 
                             placeholder="0.00" 
                         />
                     </div>
@@ -92,8 +111,9 @@ const Settings = () => {
                         <label className="small">Yearly Fee ($)</label>
                         <input 
                             className="input" 
+                            name="fee_yearly"
                             value={settings.fee_yearly} 
-                            onChange={e=>setSettings({...settings, fee_yearly: e.target.value})} 
+                            onChange={handleInputChange} 
                             placeholder="0.00" 
                         />
                     </div>
@@ -106,32 +126,34 @@ const Settings = () => {
                 <div style={{display:'flex', alignItems:'center', marginBottom:'10px'}}>
                     <input 
                         type="checkbox" 
-                        id="auto_ban" 
+                        id="plex_auto_ban" 
+                        name="plex_auto_ban"
                         checked={settings.plex_auto_ban} 
-                        onChange={e=>setSettings({...settings, plex_auto_ban: e.target.checked})} 
+                        onChange={handleToggleChange} 
                         style={{marginRight:'10px'}} 
                     />
-                    <label htmlFor="auto_ban">
+                    <label htmlFor="plex_auto_ban">
                         <strong>Auto-Ban (Revoke Access)</strong>
-                        <div className="small" style={{color:'var(--text-muted)'}}>Remove users from Plex when marked as "Disabled".</div>
+                        <div className="small" style={{color:'var(--text-muted)'}}>Remove users from Plex shares when marked as "Disabled".</div>
                     </label>
                 </div>
                 <div style={{display:'flex', alignItems:'center'}}>
                     <input 
                         type="checkbox" 
-                        id="auto_invite" 
+                        id="plex_auto_invite" 
+                        name="plex_auto_invite"
                         checked={settings.plex_auto_invite} 
-                        onChange={e=>setSettings({...settings, plex_auto_invite: e.target.checked})} 
+                        onChange={handleToggleChange} 
                         style={{marginRight:'10px'}} 
                     />
-                    <label htmlFor="auto_invite">
+                    <label htmlFor="plex_auto_invite">
                         <strong>Auto-Invite (Grant Access)</strong>
-                        <div className="small" style={{color:'var(--text-muted)'}}>Invite users to Plex when marked as "Active".</div>
+                        <div className="small" style={{color:'var(--text-muted)'}}>Invite users to Plex shares when marked as "Active".</div>
                     </label>
                 </div>
             </div>
 
-            {/* SECTION 3: ACCESS CONTROL */}
+            {/* SECTION 3: ACCESS CONTROL (LIBRARIES) */}
             <div className="card" style={{marginBottom:'20px'}}>
                 <h3>Default Access Control</h3>
                 <p className="small" style={{color:'var(--text-muted)'}}>
@@ -153,7 +175,7 @@ const Settings = () => {
                                             <input 
                                                 type="checkbox" 
                                                 checked={settings.default_library_ids.includes(uniqueId)} 
-                                                onChange={() => handleCheckbox(server.name, lib.id)}
+                                                onChange={() => handleLibraryCheckbox(server.name, lib.id)}
                                             />
                                             <span style={{fontSize:'0.9rem'}}>{lib.title} <span style={{fontSize:'0.7rem', color:'gray'}}>({lib.type})</span></span>
                                         </label>
