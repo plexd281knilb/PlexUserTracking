@@ -4,13 +4,14 @@ import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-do
 // Pages
 import Users from './pages/Users';
 import Settings from './pages/Settings';
-import Dashboard from './pages/Dashboard'; // Assuming this exists
-import Expenses from './pages/Expenses';   // Assuming this exists
+import Dashboard from './pages/Dashboard';
+import Expenses from './pages/Expenses';
+import Upcoming from './pages/Upcoming'; // NEW IMPORT
 import Venmo from './pages/payments/Venmo';
 import Zelle from './pages/payments/Zelle';
 import Paypal from './pages/payments/Paypal';
 
-import './styles.css'; // Using your existing styles
+import './styles.css';
 
 export const ThemeContext = createContext();
 
@@ -40,6 +41,9 @@ function App() {
                             </NavLink>
                             <NavLink to="/users" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
                                 👥 Users
+                            </NavLink>
+                            <NavLink to="/upcoming" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+                                📅 Upcoming
                             </NavLink>
                         </div>
 
@@ -81,19 +85,13 @@ function App() {
 
                     <main className="main">
                         <Routes>
-                            {/* Default Route */}
                             <Route path="/" element={<Dashboard />} />
-                            
-                            {/* Dashboard Routes */}
                             <Route path="/dashboard" element={<Dashboard />} />
                             <Route path="/users" element={<Users />} />
-                            
-                            {/* Payment Routes */}
+                            <Route path="/upcoming" element={<Upcoming />} />
                             <Route path="/payments/venmo" element={<Venmo />} />
                             <Route path="/payments/zelle" element={<Zelle />} />
                             <Route path="/payments/paypal" element={<Paypal />} />
-                            
-                            {/* System Routes */}
                             <Route path="/expenses" element={<Expenses />} />
                             <Route path="/settings" element={<Settings />} />
                         </Routes>

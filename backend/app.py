@@ -22,7 +22,7 @@ for path in possible_paths:
         FRONTEND_FOLDER = path
         break
 
-# Initialize Flask (Remove static_url_path to avoid conflicts)
+# Initialize Flask
 app = Flask(__name__, static_folder=FRONTEND_FOLDER)
 CORS(app)
 
@@ -43,6 +43,7 @@ from routes.dashboard import dashboard_bp
 from routes.payments import payments_bp
 from routes.logs import logs_bp
 from routes.expenses import expenses_bp
+from routes.upcoming import upcoming_bp  # <--- IMPORTED
 
 app.register_blueprint(users_bp)
 app.register_blueprint(settings_bp)
@@ -50,8 +51,9 @@ app.register_blueprint(dashboard_bp)
 app.register_blueprint(payments_bp)
 app.register_blueprint(logs_bp)
 app.register_blueprint(expenses_bp)
+app.register_blueprint(upcoming_bp)      # <--- REGISTERED
 
-# 4. THE CATCH-ALL ROUTE (Fixes "Invalid URL" on Refresh)
+# 4. THE CATCH-ALL ROUTE
 # This function handles EVERY URL that isn't an API endpoint.
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -65,8 +67,6 @@ def serve(path):
         return send_from_directory(app.static_folder, path)
     
     # C. FOR EVERYTHING ELSE (Users, Settings, etc.): Serve index.html
-    # This tricks the browser into loading the React app, which then
-    # reads the URL and shows the correct page.
     return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
