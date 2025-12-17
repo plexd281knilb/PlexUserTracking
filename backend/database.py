@@ -55,11 +55,17 @@ def load_settings():
     return data
 def save_settings(data): save_data('settings', data)
 
+# --- Users ---
 def load_users(): return load_data('users', [])
 def save_users(data): save_data('users', data)
+def delete_user(user_id):
+    users = load_users()
+    users = [u for u in users if u['id'] != user_id]
+    save_users(users)
 
+# --- Servers ---
 def load_servers():
-    defaults = {'plex': [], 'tautulli': []}
+    defaults = {'plex': []}
     data = load_data('servers', defaults)
     if 'plex' not in data: data['plex'] = []
     return data
@@ -93,14 +99,12 @@ def save_payment_accounts(service, accounts):
 def load_payment_logs(): return load_data('payment_logs', [])
 def save_payment_log(log):
     logs = load_payment_logs()
-    # Check duplicate
     if not any(l['raw_text'] == log['raw_text'] and l['date'] == log['date'] for l in logs):
         logs.insert(0, log)
         save_data('payment_logs', logs)
 
 def delete_payment_log(log_data):
     logs = load_payment_logs()
-    # Remove log that matches both date and text
     new_logs = [l for l in logs if not (l.get('date') == log_data.get('date') and l.get('raw_text') == log_data.get('raw_text'))]
     save_data('payment_logs', new_logs)
 

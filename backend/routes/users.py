@@ -1,6 +1,6 @@
 ﻿from flask import Blueprint, jsonify, request
-from database import load_users, save_users, load_payment_logs, save_data
-from integrations import fetch_all_plex_users, fetch_all_tautulli_users, modify_plex_access
+from database import load_users, save_users, delete_user, load_payment_logs, save_data
+from integrations import fetch_all_plex_users, modify_plex_access
 
 users_bp = Blueprint('users', __name__, url_prefix='/api/users')
 
@@ -23,6 +23,21 @@ def bulk_update():
             count += 1
     save_users(users)
     return jsonify({'message': f'Updated {count} users.'})
+
+@users_bp.route('/bulk/delete', methods=['POST'])
+def bulk_delete():
+    data = request.json
+    user_ids = data.get('ids', [])
+    users = load_users()
+    initial_count = len(users)
+    users = [u for u in users if u['id'] not in user_ids]
+    save_users(users)
+    return jsonify({'message': f'Deleted {initial_count - len(users)} users.'})
+
+@users_bp.route('/<int:user_id>', methods=['DELETE'])
+def remove_user(user_id):
+    delete_user(user_id)
+    return jsonify({'message': 'User deleted'})
 
 @users_bp.route('/<int:user_id>', methods=['PUT'])
 def update_user(user_id):
@@ -47,7 +62,6 @@ def match_payment(user_id):
             user['last_paid'] = data.get('date')
             user['last_payment_amount'] = data.get('amount')
             
-            # --- FEATURE: Auto-Update Name ---
             if data.get('sender') and not user.get('full_name'):
                 user['full_name'] = data.get('sender')
                 
@@ -78,8 +92,5 @@ def unmap_payment():
 
 @users_bp.route('/import/plex', methods=['POST'])
 def import_plex():
-    return jsonify({'message': f'Imported {fetch_all_plex_users()} users.'})
-
-@users_bp.route('/import/tautulli', methods=['POST'])
-def import_tautulli():
-    return jsonify({'message': f'Imported {fetch_all_tautulli_users()} users.'})
+    count = fetch_all_plex_users()
+    return jsonify({'message': f'Imported {count} new users from Plex.'})

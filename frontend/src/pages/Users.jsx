@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { apiGet, apiPost, apiPut } from 'api';
+import { apiGet, apiPost, apiPut, apiDelete } from 'api';
 
 const Users = () => {
     const [users, setUsers] = useState([]);
@@ -18,7 +18,7 @@ const Users = () => {
                 apiGet('/payment_logs')
             ]);
             setUsers(uData);
-            setLogs(lData); // Show all logs (Matched & Unmapped)
+            setLogs(lData); 
         } catch (e) { console.error(e); } 
         finally { setLoading(false); }
     };
@@ -45,10 +45,25 @@ const Users = () => {
         } catch (e) { alert('Bulk update failed.'); }
     };
 
+    const handleBulkDelete = async () => {
+        if (!window.confirm(`DELETE ${selectedIds.length} users? This cannot be undone.`)) return;
+        try {
+            await apiPost('/users/bulk/delete', { ids: selectedIds }, localStorage.getItem('admin_token'));
+            setSelectedIds([]); 
+            fetchData(); 
+        } catch (e) { alert('Bulk delete failed.'); }
+    };
+
     const handleSaveUser = async (e) => {
         e.preventDefault();
         await apiPut(`/users/${editUser.id}`, editUser, localStorage.getItem('admin_token'));
         setEditUser(null);
+        fetchData();
+    };
+
+    const handleDeleteUser = async (id) => {
+        if (!window.confirm("Delete this user? You can re-import them from Plex.")) return;
+        await apiDelete(`/users/${id}`, localStorage.getItem('admin_token'));
         fetchData();
     };
 
@@ -65,12 +80,11 @@ const Users = () => {
     };
 
     const handleUnmap = async (log) => {
-        if(!window.confirm(`Unlink this payment? It will become 'Unmapped'.`)) return;
+        if(!window.confirm(`Unlink this payment?`)) return;
         await apiPost(`/users/unmap_payment`, {
             date: log.date,
             raw_text: log.raw_text
         }, localStorage.getItem('admin_token'));
-        alert("Payment unmapped.");
         setMatchUser(null);
         fetchData();
     };
@@ -86,11 +100,10 @@ const Users = () => {
         fetchData();
     };
 
-    const handleImport = async (source) => {
-        if (!window.confirm(`Import from ${source}?`)) return;
+    const handleImportPlex = async () => {
         setLoading(true);
         try {
-            const res = await apiPost(`/users/import/${source}`, {}, localStorage.getItem('admin_token'));
+            const res = await apiPost(`/users/import/plex`, {}, localStorage.getItem('admin_token'));
             alert(res.message);
             fetchData();
         } catch (e) { alert('Import failed.'); }
@@ -122,8 +135,7 @@ const Users = () => {
                 <h1>User Management</h1>
                 <div className="flex" style={{gap: '10px'}}>
                     <button className="button" style={{backgroundColor: '#64748b'}} onClick={handleRemap}>🔄 Re-Map Payments</button>
-                    <button className="button" onClick={() => handleImport('plex')}>Import Plex</button>
-                    <button className="button" onClick={() => handleImport('tautulli')}>Import Tautulli</button>
+                    <button className="button" onClick={handleImportPlex}>Import Plex Users</button>
                 </div>
             </div>
 
@@ -135,8 +147,10 @@ const Users = () => {
                     <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#64748b'}} onClick={() => handleBulkUpdate({payment_freq: 'Monthly'})}>Set Monthly</button>
                     <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#8b5cf6'}} onClick={() => handleBulkUpdate({payment_freq: 'Yearly'})}>Set Yearly</button>
                     <div style={{height: '20px', width: '1px', backgroundColor: '#94a3b8'}}></div>
-                    <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#10b981'}} onClick={() => handleBulkUpdate({status: 'Active'})}>Enable All</button>
-                    <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#ef4444'}} onClick={() => handleBulkUpdate({status: 'Disabled'})}>Disable All</button>
+                    <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#10b981'}} onClick={() => handleBulkUpdate({status: 'Active'})}>Enable</button>
+                    <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#ef4444'}} onClick={() => handleBulkUpdate({status: 'Disabled'})}>Disable</button>
+                    <div style={{height: '20px', width: '1px', backgroundColor: '#94a3b8'}}></div>
+                    <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#ef4444'}} onClick={handleBulkDelete}>Delete Selected</button>
                 </div>
             )}
 
@@ -150,7 +164,7 @@ const Users = () => {
                             <th>Frequency</th>
                             <th>Status (Access)</th>
                             <th>Last Paid (Amount)</th>
-                            <th>Actions</th>
+                            <th style={{width: '220px'}}>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -165,8 +179,9 @@ const Users = () => {
                                 <td>
                                     <div className="flex" style={{gap:'5px'}}>
                                         <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem'}} onClick={() => setEditUser(u)}>Edit</button>
-                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: '#f59e0b'}} onClick={() => setMatchUser(u)}>Match Pay</button>
+                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: '#f59e0b'}} onClick={() => setMatchUser(u)}>Match</button>
                                         <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: u.status==='Active' ? '#ef4444' : '#10b981', opacity: u.payment_freq === 'Exempt' && u.status === 'Active' ? 0.5 : 1}} onClick={() => toggleStatus(u)}>{u.status==='Active' ? 'Disable' : 'Enable'}</button>
+                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: '#dc2626'}} onClick={() => handleDeleteUser(u.id)}>Delete</button>
                                     </div>
                                 </td>
                             </tr>
@@ -175,6 +190,7 @@ const Users = () => {
                 </table>
             </div>
 
+            {/* Edit Modal (Keeping Same) */}
             {editUser && (
                 <div style={modalStyle}>
                     <div className="card" style={{minWidth: '400px', margin: 'auto'}}>
@@ -204,6 +220,7 @@ const Users = () => {
                 </div>
             )}
 
+            {/* Match Modal (Keeping Same) */}
             {matchUser && (
                 <div style={modalStyle}>
                     <div className="card" style={{minWidth: '600px', maxHeight: '80vh', overflowY: 'auto', margin: 'auto'}}>
