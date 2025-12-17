@@ -20,6 +20,7 @@ def get_email_body(msg):
     return ""
 
 def get_email_subject(msg):
+    """Decodes the email subject, handling RFC 2047 encoding."""
     subject_header = msg.get("Subject", "")
     if not subject_header:
         return ""
@@ -35,7 +36,7 @@ def get_email_subject(msg):
             subject += str(token)
     return subject.strip()
 
-# --- Payment Processing ---
+# --- Payment Processing Logic ---
 def process_payment(users, sender_name, amount_str, date_obj, service_name, existing_logs=None, save_db=True):
     date_str = datetime.now().strftime('%Y-%m-%d')
     try:
@@ -123,26 +124,22 @@ def remap_existing_payments():
     save_users(users)
     return count
 
-# --- PLEX LOGIC ---
+# --- PLEX LOGIC (FIXED) ---
 def modify_plex_access(user, enable=True):
-    print(f"--- Modifying Access: {user['username']} -> {enable} ---")
+    print(f"--- PLEX ACTION: {user['username']} | Enable: {enable} ---")
     settings = load_settings()
     
     if not enable and user.get('payment_freq') == 'Exempt': 
         print("User is Exempt. Skipping.")
-        return [f"Skipped {user.get('username')}: Exempt"]
+        return [f"Skipped {user.get('username')}: User is Exempt"]
 
     auto_ban = settings.get('plex_auto_ban', True)
     auto_invite = settings.get('plex_auto_invite', True)
 
-    if not enable and not auto_ban: 
-        print("Auto-Ban Disabled. Skipping.")
-        return ["Skipped: Auto-Ban Disabled"]
-    if enable and not auto_invite: 
-        print("Auto-Invite Disabled. Skipping.")
-        return ["Skipped: Auto-Invite Disabled"]
+    if not enable and not auto_ban: return ["Skipped: Auto-Ban is disabled"]
+    if enable and not auto_invite: return ["Skipped: Auto-Invite is disabled"]
 
-    # Parse Config
+    # Parse Config: Map ServerName -> [LibraryID, LibraryID]
     raw_config = settings.get('default_library_ids', [])
     server_libs_map = {} 
     
@@ -151,12 +148,17 @@ def modify_plex_access(user, enable=True):
             srv_name, lib_id = item.split("__", 1)
             if srv_name not in server_libs_map: 
                 server_libs_map[srv_name] = []
-            server_libs_map[srv_name].append(int(lib_id)) # Convert to INT
+            # FIX: Ensure Library ID is an Integer
+            try:
+                server_libs_map[srv_name].append(int(lib_id))
+            except:
+                pass
 
     servers = load_servers()['plex']
     results = []
 
     for server in servers:
+        # If enabling, skip servers that have no libraries selected
         if enable and server['name'] not in server_libs_map: 
             continue
 
@@ -177,11 +179,11 @@ def modify_plex_access(user, enable=True):
                 except: pass
 
             if not machine_id:
-                print(f"Could not find Machine ID for {server['name']}")
-                results.append(f"{server['name']}: No Machine ID")
+                print(f"Server {server['name']}: No Machine ID found.")
+                results.append(f"{server['name']}: Could not find Machine ID")
                 continue
 
-            # 2. Find User (Check by Email OR Username)
+            # 2. Check for Existing User (Check Email AND Username)
             plex_user_id = None
             try:
                 r = requests.get('https://plex.tv/api/users', headers=headers)
@@ -199,22 +201,22 @@ def modify_plex_access(user, enable=True):
                             plex_user_id = u.get('id')
                             break
             except Exception as e:
-                print(f"Error searching users: {e}")
-
-            # 3. Perform Action
+                print(f"Error fetching Plex users: {e}")
+            
             if not enable:
-                # DISABLE
+                # --- DISABLE LOGIC ---
                 if plex_user_id:
+                    print(f"Removing user ID {plex_user_id} from friends...")
                     requests.delete(f"https://plex.tv/api/friends/{plex_user_id}", headers=headers)
-                    print(f"Removed friend {plex_user_id} from {server['name']}")
                     results.append(f"{server['name']}: Access Revoked")
                 else:
+                    print("User not found in Plex friend list.")
                     results.append(f"{server['name']}: User not found (Already disabled?)")
             else:
-                # ENABLE
+                # --- ENABLE LOGIC ---
                 lib_ids = server_libs_map.get(server['name'], [])
                 if not lib_ids:
-                    results.append(f"{server['name']}: No libraries")
+                    results.append(f"{server['name']}: No libraries configured")
                     continue
 
                 payload = { 
@@ -225,17 +227,17 @@ def modify_plex_access(user, enable=True):
                     } 
                 }
                 
-                print(f"Inviting {user['email']} to {server['name']} with libs {lib_ids}")
+                print(f"Inviting {user['email']} to {server['name']} with libs: {lib_ids}")
                 resp = requests.post(f"https://plex.tv/api/servers/{machine_id}/shared_servers", headers={'X-Plex-Token': token, 'Content-Type': 'application/json', 'Accept': 'application/json'}, json=payload)
                 
                 if resp.status_code in [200, 201]:
                     results.append(f"{server['name']}: Access Granted")
                 else:
-                    print(f"Invite failed: {resp.text}")
-                    results.append(f"{server['name']}: Failed ({resp.status_code})")
+                    print(f"Invite Failed: {resp.text}")
+                    results.append(f"{server['name']}: Grant Failed ({resp.status_code})")
 
         except Exception as e: 
-            print(f"Server Error: {e}")
+            print(f"Exception for {server['name']}: {e}")
             results.append(f"{server['name']}: Error {str(e)}")
             
     return results
@@ -258,7 +260,8 @@ def get_plex_libraries(token, manual_url=None):
         except: pass
     return {"error": "Connection Failed"}
 
-# --- FETCHERS ---
+# --- FETCHERS (SYNTAX FIXED) ---
+
 def fetch_venmo_payments():
     settings = load_settings()
     search_term = settings.get('venmo_search_term', 'paid you')
@@ -266,31 +269,44 @@ def fetch_venmo_payments():
     users = load_users()
     payment_count = 0
     errors = []
+    
     venmo_pattern = re.compile(r"^(.*?) paid you (\$\d+\.\d{2})", re.IGNORECASE)
-    for acc in accounts:
-        if not acc.get('enabled', True): continue
+
+    for account in accounts:
+        if not account.get('enabled', True): continue
         mail = None
         try:
-            mail = imaplib.IMAP4_SSL(acc['imap_server'], acc['port'])
-            mail.login(acc['email'], acc['password'])
+            mail = imaplib.IMAP4_SSL(account['imap_server'], account['port'])
+            mail.login(account['email'], account['password'])
             mail.select('inbox')
+
             criteria = f'(SUBJECT "{search_term}")'
-            if "venmo.com" in acc['email']: criteria = f'(FROM "venmo@venmo.com" {criteria})'
+            if "venmo.com" in account['email'] or "gmail" in account['imap_server']:
+                criteria = f'(FROM "venmo@venmo.com" {criteria})'
+            
             status, messages = mail.search(None, criteria)
             if status == 'OK':
                 for e_id in messages[0].split()[-50:]:
                     _, msg_data = mail.fetch(e_id, '(RFC822)')
                     msg = email.message_from_bytes(msg_data[0][1])
                     subject = get_email_subject(msg)
+
                     match = venmo_pattern.search(subject)
                     if match:
-                        if process_payment(users, match.group(1).strip(), match.group(2), msg["Date"], 'Venmo'): payment_count += 1
-            acc['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        except Exception as e: errors.append(str(e))
-        finally: 
+                        if process_payment(users, match.group(1).strip(), match.group(2), msg["Date"], 'Venmo'):
+                            payment_count += 1
+            
+            account['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+        except Exception as e:
+            errors.append(f"{account['email']}: {str(e)}")
+        finally:
             if mail:
-                try: mail.logout()
-                except: pass
+                try:
+                    mail.logout()
+                except:
+                    pass
+
     save_users(users)
     save_payment_accounts('venmo', accounts)
     return {"count": payment_count, "errors": errors}
@@ -302,16 +318,20 @@ def fetch_paypal_payments():
     users = load_users()
     payment_count = 0
     errors = []
+    
     paypal_pattern = re.compile(r"(.*?)\s+sent\s+you\s+(\$\d+\.\d{2})\s+USD", re.IGNORECASE)
-    for acc in accounts:
-        if not acc.get('enabled', True): continue
+
+    for account in accounts:
+        if not account.get('enabled', True): continue
         mail = None
         try:
-            mail = imaplib.IMAP4_SSL(acc['imap_server'], acc['port'])
-            mail.login(acc['email'], acc['password'])
+            mail = imaplib.IMAP4_SSL(account['imap_server'], account['port'])
+            mail.login(account['email'], account['password'])
             mail.select('inbox')
+
             criteria = f'(SUBJECT "{search_term}")'
             status, messages = mail.search(None, criteria)
+            
             if status == 'OK':
                 for e_id in messages[0].split()[-50:]:
                     _, msg_data = mail.fetch(e_id, '(RFC822)')
@@ -321,14 +341,22 @@ def fetch_paypal_payments():
                     if not match:
                         body = get_email_body(msg)
                         match = paypal_pattern.search(body)
+                    
                     if match:
-                        if process_payment(users, match.group(1).strip(), match.group(2), msg["Date"], 'PayPal'): payment_count += 1
-            acc['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        except Exception as e: errors.append(str(e))
-        finally: 
+                        if process_payment(users, match.group(1).strip(), match.group(2), msg["Date"], 'PayPal'):
+                            payment_count += 1
+            
+            account['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+        except Exception as e:
+            errors.append(f"{account['email']}: {str(e)}")
+        finally:
             if mail:
-                try: mail.logout()
-                except: pass
+                try:
+                    mail.logout()
+                except:
+                    pass
+
     save_users(users)
     save_payment_accounts('paypal', accounts)
     return {"count": payment_count, "errors": errors}
@@ -340,37 +368,51 @@ def fetch_zelle_payments():
     users = load_users()
     payment_count = 0
     errors = []
+    
     zelle_pattern = re.compile(r"received (\$\d+\.\d{2}) from ([A-Za-z ]+)")
-    for acc in accounts:
-        if not acc.get('enabled', True): continue
+
+    for account in accounts:
+        if not account.get('enabled', True): continue
         mail = None
         try:
-            mail = imaplib.IMAP4_SSL(acc['imap_server'], acc['port'])
-            mail.login(acc['email'], acc['password'])
+            mail = imaplib.IMAP4_SSL(account['imap_server'], account['port'])
+            mail.login(account['email'], account['password'])
             mail.select('inbox')
+
             criteria = f'(SUBJECT "{search_term}")'
             status, messages = mail.search(None, criteria)
+            
             if status == 'OK':
                 for e_id in messages[0].split()[-50:]:
                     _, msg_data = mail.fetch(e_id, '(RFC822)')
                     msg = email.message_from_bytes(msg_data[0][1])
                     subject = get_email_subject(msg)
+                    
                     match = zelle_pattern.search(subject)
                     if not match:
                         body = get_email_body(msg)
                         match = zelle_pattern.search(body)
+                        
                     if match:
-                        if process_payment(users, match.group(2).strip(), match.group(1), msg["Date"], 'Zelle'): payment_count += 1
-            acc['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        except Exception as e: errors.append(str(e))
-        finally: 
+                        if process_payment(users, match.group(2).strip(), match.group(1), msg["Date"], 'Zelle'):
+                            payment_count += 1
+            
+            account['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+        except Exception as e:
+            errors.append(f"{account['email']}: {str(e)}")
+        finally:
             if mail:
-                try: mail.logout()
-                except: pass
+                try:
+                    mail.logout()
+                except:
+                    pass
+
     save_users(users)
     save_payment_accounts('zelle', accounts)
     return {"count": payment_count, "errors": errors}
 
+# --- Utils ---
 def fetch_all_plex_users():
     servers = load_servers()['plex']
     users = load_users()
@@ -384,11 +426,17 @@ def fetch_all_plex_users():
                     email = u.get('email', '').lower()
                     username = u.get('username')
                     if not email: continue
+                    
                     if not any(curr['email'].lower() == email for curr in users):
                         new_id = (max([x['id'] for x in users], default=0) + 1)
                         users.append({
-                            "id": new_id, "username": username, "email": email, "full_name": "",
-                            "status": "Pending", "payment_freq": "Exempt", "last_paid": "Never"
+                            "id": new_id,
+                            "username": username,
+                            "email": email,
+                            "full_name": "",
+                            "status": "Pending",
+                            "payment_freq": "Exempt",
+                            "last_paid": "Never"
                         })
                         count += 1
         except: pass
@@ -408,4 +456,5 @@ def test_email_connection(host, port, email_user, email_pass):
         mail.login(email_user, email_pass)
         mail.logout()
         return {"status": "success", "message": "Connection Successful"}
-    except Exception as e: return {"status": "error", "message": str(e)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

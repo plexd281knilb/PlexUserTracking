@@ -18,13 +18,11 @@ def update_user(user_id):
             old_status = user.get('status')
             user.update(data)
             
-            # --- CRITICAL: TRIGGER PLEX LOGIC ---
+            # --- TRIGGER PLEX ACCESS UPDATE ---
             if 'status' in data and data['status'] != old_status:
                 if data['status'] == 'Active':
-                    print(f"Enabling access for {user['username']}")
                     modify_plex_access(user, enable=True)
                 elif data['status'] == 'Disabled':
-                    print(f"Disabling access for {user['username']}")
                     modify_plex_access(user, enable=False)
             
             save_users(users)
@@ -50,7 +48,7 @@ def bulk_update():
             old_status = user.get('status')
             user.update(updates)
             
-            # --- CRITICAL: TRIGGER PLEX LOGIC FOR BULK ---
+            # --- TRIGGER PLEX ACCESS UPDATE ---
             if 'status' in updates and updates['status'] != old_status:
                 if updates['status'] == 'Active':
                     modify_plex_access(user, enable=True)
