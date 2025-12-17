@@ -7,125 +7,137 @@ const Settings = () => {
         fee_yearly: "0.00",
         plex_auto_ban: true,
         plex_auto_invite: true,
-        venmo_search_term: '',
-        paypal_search_term: '',
-        zelle_search_term: ''
+        default_library_ids: [] // Array of "ServerName__LibID"
     });
+    const [servers, setServers] = useState([]);
+    const [libraries, setLibraries] = useState({}); // { "ServerName": [ {id, title}, ... ] }
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        apiGet('/settings')
-            .then(data => {
-                setSettings(prev => ({ ...prev, ...data }));
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error(err);
-                setLoading(false);
-            });
+        const loadData = async () => {
+            try {
+                // 1. Load Settings and Servers
+                const [sets, srvs] = await Promise.all([
+                    apiGet('/settings'),
+                    apiGet('/settings/servers')
+                ]);
+                setSettings(prev => ({ ...prev, ...sets }));
+                
+                const plexServers = srvs.plex || [];
+                setServers(plexServers);
+
+                // 2. Automatically Fetch Libraries for ALL servers
+                const libMap = {};
+                await Promise.all(plexServers.map(async (server) => {
+                    try {
+                        const res = await apiPost('/settings/plex/libraries', { token: server.token, url: server.url }, localStorage.getItem('admin_token'));
+                        if (res.libraries) {
+                            libMap[server.name] = res.libraries;
+                        }
+                    } catch (e) { console.error(`Failed to load libs for ${server.name}`); }
+                }));
+                setLibraries(libMap);
+
+            } catch (e) { console.error(e); }
+            setLoading(false);
+        };
+        loadData();
     }, []);
 
-    const handleChange = (e) => {
-        const { name, value, type, checked } = e.target;
-        setSettings(prev => ({
-            ...prev,
-            [name]: type === 'checkbox' ? checked : value
-        }));
+    const handleCheckbox = (serverName, libId) => {
+        // Unique Key: ServerName__LibraryID
+        const uniqueId = `${serverName}__${libId}`;
+        const current = settings.default_library_ids || [];
+        
+        let updated;
+        if (current.includes(uniqueId)) {
+            updated = current.filter(id => id !== uniqueId);
+        } else {
+            updated = [...current, uniqueId];
+        }
+        
+        setSettings({ ...settings, default_library_ids: updated });
     };
 
     const handleSave = async () => {
         try {
             await apiPost('/settings', settings, localStorage.getItem('admin_token'));
             alert('Settings Saved Successfully');
-        } catch (e) {
-            alert('Failed to save settings');
-        }
+        } catch (e) { alert('Save failed'); }
     };
 
     if (loading) return <div>Loading...</div>;
 
     return (
         <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-            <h1>System Settings</h1>
+            <h1>Settings</h1>
 
-            {/* SUBSCRIPTION FEES */}
-            <div className="card" style={{ marginBottom: '20px' }}>
+            {/* SUBSCRIPTION COSTS */}
+            <div className="card" style={{marginBottom:'20px'}}>
                 <h3>Subscription Costs</h3>
-                <p className="small" style={{ color: 'var(--text-muted)', marginBottom: '15px' }}>
-                    Set the standard amount users are expected to pay. This helps track who has paid in full.
+                <p className="small" style={{color:'var(--text-muted)', marginBottom:'10px'}}>
+                    Set the standard amount users are expected to pay.
                 </p>
-                <div className="flex" style={{ gap: '20px' }}>
-                    <div style={{ flex: 1 }}>
+                <div className="flex" style={{gap:'20px'}}>
+                    <div style={{flex:1}}>
                         <label className="small">Monthly Fee ($)</label>
-                        <input 
-                            className="input" 
-                            name="fee_monthly" 
-                            value={settings.fee_monthly} 
-                            onChange={handleChange} 
-                            placeholder="0.00"
-                        />
+                        <input className="input" value={settings.fee_monthly} onChange={e=>setSettings({...settings, fee_monthly: e.target.value})} placeholder="0.00" />
                     </div>
-                    <div style={{ flex: 1 }}>
+                    <div style={{flex:1}}>
                         <label className="small">Yearly Fee ($)</label>
-                        <input 
-                            className="input" 
-                            name="fee_yearly" 
-                            value={settings.fee_yearly} 
-                            onChange={handleChange} 
-                            placeholder="0.00"
-                        />
+                        <input className="input" value={settings.fee_yearly} onChange={e=>setSettings({...settings, fee_yearly: e.target.value})} placeholder="0.00" />
                     </div>
                 </div>
             </div>
 
             {/* PLEX AUTOMATION */}
-            <div className="card" style={{ marginBottom: '20px' }}>
+            <div className="card" style={{marginBottom:'20px'}}>
                 <h3>Plex Automation</h3>
-                <p className="small" style={{ color: 'var(--text-muted)', marginBottom: '15px' }}>
-                    Control how the system interacts with your Plex server.
+                <div style={{display:'flex', alignItems:'center', marginBottom:'10px'}}>
+                    <input type="checkbox" id="auto_ban" checked={settings.plex_auto_ban} onChange={e=>setSettings({...settings, plex_auto_ban: e.target.checked})} style={{marginRight:'10px'}} />
+                    <label htmlFor="auto_ban"><strong>Auto-Ban (Revoke Access)</strong><div className="small">Remove users from Plex when Disabled.</div></label>
+                </div>
+                <div style={{display:'flex', alignItems:'center'}}>
+                    <input type="checkbox" id="auto_invite" checked={settings.plex_auto_invite} onChange={e=>setSettings({...settings, plex_auto_invite: e.target.checked})} style={{marginRight:'10px'}} />
+                    <label htmlFor="auto_invite"><strong>Auto-Invite (Grant Access)</strong><div className="small">Invite users to Plex when Enabled/Paid.</div></label>
+                </div>
+            </div>
+
+            {/* ACCESS CONTROL */}
+            <div className="card" style={{marginBottom:'20px'}}>
+                <h3>Default Access Control</h3>
+                <p className="small" style={{color:'var(--text-muted)'}}>
+                    Select libraries to share automatically. (Libraries loaded automatically)
                 </p>
                 
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
-                    <input 
-                        type="checkbox" 
-                        id="plex_auto_ban" 
-                        name="plex_auto_ban" 
-                        checked={settings.plex_auto_ban} 
-                        onChange={handleChange}
-                        style={{ marginRight: '10px' }}
-                    />
-                    <label htmlFor="plex_auto_ban">
-                        <strong>Auto-Ban (Revoke Access)</strong>
-                        <div className="small" style={{ color: 'var(--text-muted)' }}>
-                            Automatically remove users from Plex shares if they are marked as "Disabled".
-                        </div>
-                    </label>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <input 
-                        type="checkbox" 
-                        id="plex_auto_invite" 
-                        name="plex_auto_invite" 
-                        checked={settings.plex_auto_invite} 
-                        onChange={handleChange}
-                        style={{ marginRight: '10px' }}
-                    />
-                    <label htmlFor="plex_auto_invite">
-                        <strong>Auto-Invite (Grant Access)</strong>
-                        <div className="small" style={{ color: 'var(--text-muted)' }}>
-                            Automatically invite users to Plex shares when they are marked as "Active" or pay.
-                        </div>
-                    </label>
-                </div>
+                {servers.map(server => (
+                    <div key={server.id} style={{marginBottom: '15px', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px'}}>
+                        <strong>{server.name}</strong>
+                        
+                        {libraries[server.name] ? (
+                            <div style={{marginTop:'10px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'5px'}}>
+                                {libraries[server.name].map(lib => {
+                                    const uniqueId = `${server.name}__${lib.id}`;
+                                    return (
+                                        <label key={uniqueId} style={{display:'flex', alignItems:'center', gap:'8px', cursor:'pointer'}}>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={settings.default_library_ids.includes(uniqueId)} 
+                                                onChange={() => handleCheckbox(server.name, lib.id)}
+                                            />
+                                            <span style={{fontSize:'0.9rem'}}>{lib.title} <span style={{fontSize:'0.7rem', color:'gray'}}>({lib.type})</span></span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="small" style={{marginTop:'10px', color:'orange'}}>Loading libraries...</div>
+                        )}
+                    </div>
+                ))}
             </div>
 
-            {/* SAVE BUTTON */}
-            <div style={{ textAlign: 'right' }}>
-                <button className="button" onClick={handleSave} style={{ padding: '10px 30px', fontSize: '1rem' }}>
-                    Save All Settings
-                </button>
-            </div>
+            <button className="button" onClick={handleSave} style={{width:'100%', padding:'12px'}}>Save All Settings</button>
         </div>
     );
 };

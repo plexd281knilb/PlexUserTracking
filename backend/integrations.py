@@ -19,6 +19,7 @@ def get_email_body(msg):
         return msg.get_payload(decode=True).decode('utf-8', errors='ignore')
     return ""
 
+# --- Helper: Extract Subject ---
 def get_email_subject(msg):
     """Decodes the email subject, handling RFC 2047 encoding."""
     subject_header = msg.get("Subject", "")
@@ -135,62 +136,61 @@ def remap_existing_payments():
 # --- PLEX LOGIC ---
 def modify_plex_access(user, enable=True):
     settings = load_settings()
-    
-    if not enable and user.get('payment_freq') == 'Exempt':
-        return [f"Skipped {user.get('username')}: User is Exempt"]
+    if not enable and user.get('payment_freq') == 'Exempt': return ["Skipped: Exempt"]
+    if not enable and not settings.get('plex_auto_ban', True): return ["Skipped: Auto-Ban Disabled"]
+    if enable and not settings.get('plex_auto_invite', True): return ["Skipped: Auto-Invite Disabled"]
 
-    auto_ban = settings.get('plex_auto_ban', True)
-    auto_invite = settings.get('plex_auto_invite', True)
-    library_ids = settings.get('default_library_ids', [])
-
-    if not enable and not auto_ban: return ["Skipped: Auto-Ban is disabled"]
-    if enable and not auto_invite: return ["Skipped: Auto-Invite is disabled"]
+    # Parse Config
+    raw_config = settings.get('default_library_ids', [])
+    server_libs_map = {} 
+    for item in raw_config:
+        if "__" in item:
+            srv_name, lib_id = item.split("__", 1)
+            if srv_name not in server_libs_map: server_libs_map[srv_name] = []
+            server_libs_map[srv_name].append(lib_id)
 
     servers = load_servers()['plex']
     results = []
 
     for server in servers:
+        if enable and server['name'] not in server_libs_map: continue
+
         token = server['token']
         headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
         try:
             res = requests.get('https://plex.tv/api/resources?includeHttps=1', headers=headers, timeout=5)
             machine_id = None
             if res.status_code == 200:
-                try:
-                    root = ET.fromstring(res.content)
-                    for device in root.findall('Device'):
-                        if device.get('product') == 'Plex Media Server':
-                            if device.get('name') == server['name']:
-                                machine_id = device.get('clientIdentifier'); break
-                            if not machine_id: machine_id = device.get('clientIdentifier')
-                except: pass
-
-            if not machine_id:
-                results.append(f"{server['name']}: Could not find Machine ID")
-                continue
+                root = ET.fromstring(res.content)
+                for device in root.findall('Device'):
+                    if device.get('name') == server['name']:
+                        machine_id = device.get('clientIdentifier'); break
+            
+            if not machine_id: continue
 
             r = requests.get('https://plex.tv/api/users', headers=headers)
-            if r.status_code != 200: continue
-
-            try:
+            plex_user_id = None
+            if r.status_code == 200:
                 root = ET.fromstring(r.content)
-                plex_user_id = None
                 for u in root.findall('User'):
                     if u.get('email', '').lower() == user['email'].lower() or \
-                       u.get('username', '').lower() == user.get('plex_username', '').lower():
+                       u.get('username', '').lower() == user.get('username', '').lower():
                         plex_user_id = u.get('id'); break
-            except: continue
             
             if not enable:
                 if plex_user_id:
                     requests.delete(f"https://plex.tv/api/friends/{plex_user_id}", headers=headers)
                     results.append(f"{server['name']}: Access Revoked")
             else:
-                if not plex_user_id:
-                    results.append(f"{server['name']}: User not found on friend list.")
-                    continue
-                json_payload = { "server_id": machine_id, "shared_server": { "library_section_ids": library_ids, "invited_email": user['email'] } }
-                requests.post(f"https://plex.tv/api/servers/{machine_id}/shared_servers", headers={'X-Plex-Token': token, 'Content-Type': 'application/json', 'Accept': 'application/json'}, json=json_payload)
+                lib_ids = server_libs_map.get(server['name'], [])
+                payload = { 
+                    "server_id": machine_id, 
+                    "shared_server": { 
+                        "library_section_ids": lib_ids, 
+                        "invited_email": user['email'] 
+                    } 
+                }
+                requests.post(f"https://plex.tv/api/servers/{machine_id}/shared_servers", headers={'X-Plex-Token': token, 'Content-Type': 'application/json', 'Accept': 'application/json'}, json=payload)
                 results.append(f"{server['name']}: Access Granted")
         except Exception as e: results.append(f"{server['name']}: Error {str(e)}")
     return results
@@ -207,30 +207,13 @@ def get_plex_libraries(token, manual_url=None):
         except: return {"error": "Parsing Failed"}
 
     if manual_url:
-        clean_url = manual_url.strip().rstrip('/')
-        urls = [clean_url] if clean_url.startswith('http') else [f"http://{clean_url}", f"https://{clean_url}"]
-        for url in urls:
-            try:
-                res = requests.get(f"{url}/library/sections", headers=headers, timeout=5, verify=False)
-                if res.status_code == 200: return parse_libraries(res, "Manual Server")
-            except: pass
-        return {"error": "Manual Connection Failed"}
+        try:
+            res = requests.get(f"{manual_url}/library/sections", headers=headers, timeout=5, verify=False)
+            if res.status_code == 200: return parse_libraries(res, "Manual Server")
+        except: pass
+    return {"error": "Connection Failed"}
 
-    try:
-        res = requests.get('https://plex.tv/api/resources?includeHttps=1', headers=headers, timeout=5)
-        root = ET.fromstring(res.content)
-        for device in root.findall('Device'):
-            if device.get('product') == 'Plex Media Server':
-                for conn in device.findall('Connection'):
-                    if conn.get('uri'):
-                        try:
-                            test = requests.get(f"{conn.get('uri')}/library/sections", headers=headers, timeout=2, verify=False)
-                            if test.status_code == 200: return parse_libraries(test, device.get('name'))
-                        except: continue
-        return {"error": "No server reachable"}
-    except Exception as e: return {"error": str(e)}
-
-# --- FETCHERS ---
+# --- FETCHERS (Fixed Syntax) ---
 
 def fetch_venmo_payments():
     settings = load_settings()
@@ -240,18 +223,18 @@ def fetch_venmo_payments():
     payment_count = 0
     errors = []
     
-    venmo_pattern = re.compile(r"^(.*?) paid you (\$\d+\.\d{2})")
+    venmo_pattern = re.compile(r"^(.*?) paid you (\$\d+\.\d{2})", re.IGNORECASE)
 
-    for account in accounts:
-        if not account.get('enabled', True): continue
+    for acc in accounts:
+        if not acc.get('enabled', True): continue
         mail = None
         try:
-            mail = imaplib.IMAP4_SSL(account['imap_server'], account['port'])
-            mail.login(account['email'], account['password'])
+            mail = imaplib.IMAP4_SSL(acc['imap_server'], acc['port'])
+            mail.login(acc['email'], acc['password'])
             mail.select('inbox')
 
             criteria = f'(SUBJECT "{search_term}")'
-            if "venmo.com" in account['email'] or "gmail" in account['imap_server']:
+            if "venmo.com" in acc['email'] or "gmail" in acc['imap_server']:
                 criteria = f'(FROM "venmo@venmo.com" {criteria})'
             
             status, messages = mail.search(None, criteria)
@@ -266,15 +249,18 @@ def fetch_venmo_payments():
                         if process_payment(users, match.group(1).strip(), match.group(2), msg["Date"], 'Venmo'):
                             payment_count += 1
             
-            account['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            acc['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             
         except Exception as e:
-            errors.append(f"{account['email']}: {str(e)}")
+            errors.append(f"{acc['email']}: {str(e)}")
             print(f"Venmo Scan Error: {e}")
         finally:
             if mail:
                 try:
                     mail.close()
+                except:
+                    pass
+                try:
                     mail.logout()
                 except:
                     pass
@@ -291,15 +277,15 @@ def fetch_paypal_payments():
     payment_count = 0
     errors = []
     
-    # Matches: "Name sent you $50.00 USD" (Any characters for name)
+    # Matches: "Name sent you $50.00 USD"
     paypal_pattern = re.compile(r"(.*?) sent you (\$\d+\.\d{2}) USD", re.IGNORECASE)
 
-    for account in accounts:
-        if not account.get('enabled', True): continue
+    for acc in accounts:
+        if not acc.get('enabled', True): continue
         mail = None
         try:
-            mail = imaplib.IMAP4_SSL(account['imap_server'], account['port'])
-            mail.login(account['email'], account['password'])
+            mail = imaplib.IMAP4_SSL(acc['imap_server'], acc['port'])
+            mail.login(acc['email'], acc['password'])
             mail.select('inbox')
 
             criteria = f'(SUBJECT "{search_term}")'
@@ -323,15 +309,18 @@ def fetch_paypal_payments():
                         if process_payment(users, match.group(1).strip(), match.group(2), msg["Date"], 'PayPal'):
                             payment_count += 1
             
-            account['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            acc['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             
         except Exception as e:
-            errors.append(f"{account['email']}: {str(e)}")
+            errors.append(f"{acc['email']}: {str(e)}")
             print(f"PayPal Scan Error: {e}")
         finally:
             if mail:
                 try:
                     mail.close()
+                except:
+                    pass
+                try:
                     mail.logout()
                 except:
                     pass
@@ -350,12 +339,12 @@ def fetch_zelle_payments():
     
     zelle_pattern = re.compile(r"received (\$\d+\.\d{2}) from ([A-Za-z ]+)")
 
-    for account in accounts:
-        if not account.get('enabled', True): continue
+    for acc in accounts:
+        if not acc.get('enabled', True): continue
         mail = None
         try:
-            mail = imaplib.IMAP4_SSL(account['imap_server'], account['port'])
-            mail.login(account['email'], account['password'])
+            mail = imaplib.IMAP4_SSL(acc['imap_server'], acc['port'])
+            mail.login(acc['email'], acc['password'])
             mail.select('inbox')
 
             criteria = f'(SUBJECT "{search_term}")'
@@ -375,16 +364,17 @@ def fetch_zelle_payments():
                     if match:
                         if process_payment(users, match.group(2).strip(), match.group(1), msg["Date"], 'Zelle'):
                             payment_count += 1
-            
-            account['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
+            acc['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         except Exception as e:
-            errors.append(f"{account['email']}: {str(e)}")
+            errors.append(f"{acc['email']}: {str(e)}")
             print(f"Zelle Scan Error: {e}")
         finally:
             if mail:
                 try:
                     mail.close()
+                except:
+                    pass
+                try:
                     mail.logout()
                 except:
                     pass
