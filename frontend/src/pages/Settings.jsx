@@ -1,197 +1,205 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { apiGet, apiPost } from 'api';
+import { apiGet, apiPost, apiPut, apiDelete } from 'api';
 
 const Settings = () => {
     const [settings, setSettings] = useState({
+        // Fees
         fee_monthly: "0.00",
         fee_yearly: "0.00",
+        // Automation
         plex_auto_ban: true,
         plex_auto_invite: true,
-        default_library_ids: [], // Format: "ServerName__LibraryID"
-        venmo_search_term: '',
-        paypal_search_term: '',
-        zelle_search_term: ''
+        scan_interval_min: 60,
+        // Search Terms
+        venmo_search_term: 'paid you',
+        paypal_search_term: 'sent you',
+        zelle_search_term: 'received',
+        // Access Control
+        default_library_ids: [],
+        // SMTP
+        smtp_host: "", smtp_port: 465, smtp_user: "", smtp_pass: ""
     });
+    
     const [servers, setServers] = useState([]);
-    const [libraries, setLibraries] = useState({}); // { "ServerName": [ {id, title, type}, ... ] }
+    const [libraries, setLibraries] = useState({});
     const [loading, setLoading] = useState(true);
+    
+    // Plex Server Form
+    const [serverForm, setServerForm] = useState({ id: null, name: '', token: '', url: '' });
+    const [isEditingServer, setIsEditingServer] = useState(false);
 
     useEffect(() => {
         const loadData = async () => {
             try {
-                // 1. Load Settings and Servers
                 const [sets, srvs] = await Promise.all([
                     apiGet('/settings'),
                     apiGet('/settings/servers')
                 ]);
-                
-                // Merge loaded settings with defaults to ensure fields exist
                 setSettings(prev => ({ ...prev, ...sets }));
                 
                 const plexServers = srvs.plex || [];
                 setServers(plexServers);
 
-                // 2. Automatically Fetch Libraries for ALL connected servers
                 const libMap = {};
                 await Promise.all(plexServers.map(async (server) => {
                     try {
                         const res = await apiPost('/settings/plex/libraries', { token: server.token, url: server.url }, localStorage.getItem('admin_token'));
-                        if (res.libraries) {
-                            libMap[server.name] = res.libraries;
-                        }
-                    } catch (e) { console.error(`Failed to load libs for ${server.name}`); }
+                        if (res.libraries) libMap[server.name] = res.libraries;
+                    } catch (e) {}
                 }));
                 setLibraries(libMap);
-
             } catch (e) { console.error(e); }
             setLoading(false);
         };
         loadData();
     }, []);
 
-    // Handle generic text/number inputs
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setSettings(prev => ({ ...prev, [name]: value }));
-    };
-
-    // Handle checkboxes for booleans
-    const handleToggleChange = (e) => {
-        const { name, checked } = e.target;
-        setSettings(prev => ({ ...prev, [name]: checked }));
-    };
-
-    // Handle Library Selection (Unique ID logic)
-    const handleLibraryCheckbox = (serverName, libId) => {
-        // Unique Key: ServerName__LibraryID to prevent linking unrelated servers
-        const uniqueId = `${serverName}__${libId}`;
-        const current = settings.default_library_ids || [];
-        
-        let updated;
-        if (current.includes(uniqueId)) {
-            updated = current.filter(id => id !== uniqueId);
-        } else {
-            updated = [...current, uniqueId];
-        }
-        
-        setSettings({ ...settings, default_library_ids: updated });
-    };
-
-    const handleSave = async () => {
+    const handleSaveSettings = async () => {
         try {
             await apiPost('/settings', settings, localStorage.getItem('admin_token'));
             alert('Settings Saved Successfully');
         } catch (e) { alert('Save failed'); }
     };
 
-    if (loading) return <div>Loading Settings...</div>;
+    // --- PLEX ACTIONS ---
+    const handleSaveServer = async () => {
+        try {
+            if (isEditingServer) {
+                await apiPut(`/settings/servers/plex/${serverForm.id}`, serverForm, localStorage.getItem('admin_token'));
+            } else {
+                await apiPost("/settings/servers/plex", serverForm, localStorage.getItem('admin_token'));
+            }
+            window.location.reload();
+        } catch (e) { alert("Server save failed"); }
+    };
+
+    const handleDeleteServer = async (id) => {
+        if(!window.confirm("Remove server?")) return;
+        await apiDelete(`/settings/servers/plex/${id}`, localStorage.getItem('admin_token'));
+        window.location.reload();
+    };
+
+    const handleLibraryCheckbox = (serverName, libId) => {
+        const uniqueId = `${serverName}__${libId}`;
+        const current = settings.default_library_ids || [];
+        let updated = current.includes(uniqueId) ? current.filter(id => id !== uniqueId) : [...current, uniqueId];
+        setSettings({ ...settings, default_library_ids: updated });
+    };
+
+    if (loading) return <div>Loading...</div>;
 
     return (
-        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '900px', margin: '0 auto', paddingBottom: '50px' }}>
             <h1>System Settings</h1>
 
-            {/* SECTION 1: SUBSCRIPTION COSTS */}
+            {/* 1. FINANCIALS & SCANNING */}
             <div className="card" style={{marginBottom:'20px'}}>
-                <h3>Subscription Costs</h3>
-                <p className="small" style={{color:'var(--text-muted)', marginBottom:'10px'}}>
-                    Set the standard amount users are expected to pay. This helps calculate "Paid Thru" dates.
-                </p>
-                <div className="flex" style={{gap:'20px'}}>
+                <h3>Financials & Scanning</h3>
+                <div className="flex" style={{gap:'20px', marginBottom:'15px'}}>
                     <div style={{flex:1}}>
                         <label className="small">Monthly Fee ($)</label>
-                        <input 
-                            className="input" 
-                            name="fee_monthly"
-                            value={settings.fee_monthly} 
-                            onChange={handleInputChange} 
-                            placeholder="0.00" 
-                        />
+                        <input className="input" value={settings.fee_monthly} onChange={e=>setSettings({...settings, fee_monthly: e.target.value})} placeholder="0.00" />
                     </div>
                     <div style={{flex:1}}>
                         <label className="small">Yearly Fee ($)</label>
-                        <input 
-                            className="input" 
-                            name="fee_yearly"
-                            value={settings.fee_yearly} 
-                            onChange={handleInputChange} 
-                            placeholder="0.00" 
-                        />
+                        <input className="input" value={settings.fee_yearly} onChange={e=>setSettings({...settings, fee_yearly: e.target.value})} placeholder="0.00" />
+                    </div>
+                    <div style={{flex:1}}>
+                        <label className="small">Scan Interval (min)</label>
+                        <input className="input" type="number" value={settings.scan_interval_min} onChange={e=>setSettings({...settings, scan_interval_min: parseInt(e.target.value)})} />
+                    </div>
+                </div>
+
+                <label className="small" style={{marginTop:'10px', display:'block'}}>Email Search Terms (Subject Line)</label>
+                <div className="flex" style={{gap:'10px', marginTop:'5px'}}>
+                    <input className="input" placeholder="Venmo Term" value={settings.venmo_search_term} onChange={e=>setSettings({...settings, venmo_search_term: e.target.value})} />
+                    <input className="input" placeholder="PayPal Term" value={settings.paypal_search_term} onChange={e=>setSettings({...settings, paypal_search_term: e.target.value})} />
+                    <input className="input" placeholder="Zelle Term" value={settings.zelle_search_term} onChange={e=>setSettings({...settings, zelle_search_term: e.target.value})} />
+                </div>
+            </div>
+
+            {/* 2. PLEX SERVERS */}
+            <div className="card" style={{marginBottom:'20px'}}>
+                <h3>Plex Servers</h3>
+                <table className="table" style={{marginBottom:'15px'}}>
+                    <thead><tr><th>Name</th><th>URL</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        {servers.map(s => (
+                            <tr key={s.id}>
+                                <td>{s.name}</td>
+                                <td>{s.url || 'Auto'}</td>
+                                <td>
+                                    <div className="flex" style={{gap:'5px'}}>
+                                        <button className="button" style={{padding:'4px', fontSize:'0.7rem'}} onClick={()=>{setServerForm(s); setIsEditingServer(true);}}>Edit</button>
+                                        <button className="button" style={{padding:'4px', fontSize:'0.7rem', backgroundColor:'var(--danger)'}} onClick={()=>handleDeleteServer(s.id)}>Del</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                
+                <div style={{borderTop:'1px solid var(--border)', paddingTop:'10px'}}>
+                    <h4>{isEditingServer ? 'Edit Server' : 'Add Server'}</h4>
+                    <div className="flex" style={{gap:'10px', flexWrap:'wrap'}}>
+                        <input className="input" placeholder="Name" value={serverForm.name} onChange={e=>setServerForm({...serverForm, name: e.target.value})} style={{flex:1}} />
+                        <input className="input" type="password" placeholder="X-Plex-Token" value={serverForm.token} onChange={e=>setServerForm({...serverForm, token: e.target.value})} style={{flex:2}} />
+                        <input className="input" placeholder="URL (Optional)" value={serverForm.url} onChange={e=>setServerForm({...serverForm, url: e.target.value})} style={{flex:2}} />
+                    </div>
+                    <div className="flex" style={{gap:'10px', marginTop:'10px'}}>
+                        <button className="button" onClick={handleSaveServer}>Save Server</button>
+                        {isEditingServer && <button className="button" style={{backgroundColor:'#64748b'}} onClick={()=>{setIsEditingServer(false); setServerForm({id:null, name:'', token:'', url:''});}}>Cancel</button>}
                     </div>
                 </div>
             </div>
 
-            {/* SECTION 2: PLEX AUTOMATION */}
+            {/* 3. ACCESS CONTROL & AUTOMATION */}
             <div className="card" style={{marginBottom:'20px'}}>
-                <h3>Plex Automation</h3>
-                <div style={{display:'flex', alignItems:'center', marginBottom:'10px'}}>
-                    <input 
-                        type="checkbox" 
-                        id="plex_auto_ban" 
-                        name="plex_auto_ban"
-                        checked={settings.plex_auto_ban} 
-                        onChange={handleToggleChange} 
-                        style={{marginRight:'10px'}} 
-                    />
-                    <label htmlFor="plex_auto_ban">
-                        <strong>Auto-Ban (Revoke Access)</strong>
-                        <div className="small" style={{color:'var(--text-muted)'}}>Remove users from Plex shares when marked as "Disabled".</div>
-                    </label>
+                <div className="flex" style={{justifyContent:'space-between', marginBottom:'15px'}}>
+                    <h3>Access Control</h3>
+                    <div className="flex" style={{gap:'15px'}}>
+                        <label style={{display:'flex', alignItems:'center', gap:'5px', cursor:'pointer'}}>
+                            <input type="checkbox" checked={settings.plex_auto_ban} onChange={e=>setSettings({...settings, plex_auto_ban: e.target.checked})} />
+                            <span className="small">Auto-Ban</span>
+                        </label>
+                        <label style={{display:'flex', alignItems:'center', gap:'5px', cursor:'pointer'}}>
+                            <input type="checkbox" checked={settings.plex_auto_invite} onChange={e=>setSettings({...settings, plex_auto_invite: e.target.checked})} />
+                            <span className="small">Auto-Invite</span>
+                        </label>
+                    </div>
                 </div>
-                <div style={{display:'flex', alignItems:'center'}}>
-                    <input 
-                        type="checkbox" 
-                        id="plex_auto_invite" 
-                        name="plex_auto_invite"
-                        checked={settings.plex_auto_invite} 
-                        onChange={handleToggleChange} 
-                        style={{marginRight:'10px'}} 
-                    />
-                    <label htmlFor="plex_auto_invite">
-                        <strong>Auto-Invite (Grant Access)</strong>
-                        <div className="small" style={{color:'var(--text-muted)'}}>Invite users to Plex shares when marked as "Active".</div>
-                    </label>
-                </div>
-            </div>
-
-            {/* SECTION 3: ACCESS CONTROL (LIBRARIES) */}
-            <div className="card" style={{marginBottom:'20px'}}>
-                <h3>Default Access Control</h3>
-                <p className="small" style={{color:'var(--text-muted)'}}>
-                    Select which libraries to share automatically when a user is invited.
-                </p>
                 
-                {servers.length === 0 && <p className="small">No Plex servers connected.</p>}
-
                 {servers.map(server => (
-                    <div key={server.id} style={{marginBottom: '15px', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px'}}>
+                    <div key={server.id} style={{marginBottom: '10px', padding: '10px', border: '1px solid var(--border)', borderRadius: '8px'}}>
                         <strong>{server.name}</strong>
-                        
                         {libraries[server.name] ? (
-                            <div style={{marginTop:'10px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'5px'}}>
-                                {libraries[server.name].map(lib => {
-                                    const uniqueId = `${server.name}__${lib.id}`;
-                                    return (
-                                        <label key={uniqueId} style={{display:'flex', alignItems:'center', gap:'8px', cursor:'pointer'}}>
-                                            <input 
-                                                type="checkbox" 
-                                                checked={settings.default_library_ids.includes(uniqueId)} 
-                                                onChange={() => handleLibraryCheckbox(server.name, lib.id)}
-                                            />
-                                            <span style={{fontSize:'0.9rem'}}>{lib.title} <span style={{fontSize:'0.7rem', color:'gray'}}>({lib.type})</span></span>
-                                        </label>
-                                    );
-                                })}
+                            <div style={{marginTop:'5px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'5px'}}>
+                                {libraries[server.name].map(lib => (
+                                    <label key={`${server.name}__${lib.id}`} style={{display:'flex', alignItems:'center', gap:'8px', cursor:'pointer'}}>
+                                        <input type="checkbox" checked={settings.default_library_ids.includes(`${server.name}__${lib.id}`)} onChange={() => handleLibraryCheckbox(server.name, lib.id)} />
+                                        <span style={{fontSize:'0.85rem'}}>{lib.title}</span>
+                                    </label>
+                                ))}
                             </div>
-                        ) : (
-                            <div className="small" style={{marginTop:'10px', color:'orange'}}>Loading libraries...</div>
-                        )}
+                        ) : <div className="small" style={{color:'orange'}}>Loading libraries...</div>}
                     </div>
                 ))}
             </div>
 
-            <button className="button" onClick={handleSave} style={{width:'100%', padding:'12px', fontSize:'1rem'}}>
-                Save All Settings
-            </button>
+            {/* 4. NOTIFICATIONS */}
+            <div className="card" style={{marginBottom:'20px'}}>
+                <h3>Notifications (SMTP)</h3>
+                <div className="flex" style={{gap:'10px', marginBottom:'10px'}}>
+                    <div style={{flex:2}}><label className="small">Host</label><input className="input" placeholder="smtp.gmail.com" value={settings.smtp_host} onChange={e=>setSettings({...settings, smtp_host: e.target.value})} /></div>
+                    <div style={{flex:1}}><label className="small">Port</label><input className="input" value={settings.smtp_port} onChange={e=>setSettings({...settings, smtp_port: e.target.value})} /></div>
+                </div>
+                <div className="flex" style={{gap:'10px'}}>
+                    <div style={{flex:1}}><label className="small">Email</label><input className="input" value={settings.smtp_user} onChange={e=>setSettings({...settings, smtp_user: e.target.value})} /></div>
+                    <div style={{flex:1}}><label className="small">Password</label><input className="input" type="password" value={settings.smtp_pass} onChange={e=>setSettings({...settings, smtp_pass: e.target.value})} /></div>
+                </div>
+            </div>
+
+            <button className="button" onClick={handleSaveSettings} style={{width:'100%', padding:'15px', fontSize:'1.1rem'}}>Save All Settings</button>
         </div>
     );
 };
