@@ -3,7 +3,7 @@ import { apiGet, apiPost, apiPut, apiDelete } from 'api';
 
 const Settings = () => {
     const [settings, setSettings] = useState({
-        // Fees
+        // Financials
         fee_monthly: "0.00",
         fee_yearly: "0.00",
         // Automation
@@ -24,9 +24,10 @@ const Settings = () => {
     const [libraries, setLibraries] = useState({});
     const [loading, setLoading] = useState(true);
     
-    // Plex Server Form
+    // Server Form & Testing
     const [serverForm, setServerForm] = useState({ id: null, name: '', token: '', url: '' });
     const [isEditingServer, setIsEditingServer] = useState(false);
+    const [testResults, setTestResults] = useState({}); // { serverId: "OK" }
 
     useEffect(() => {
         const loadData = async () => {
@@ -37,10 +38,11 @@ const Settings = () => {
                 ]);
                 setSettings(prev => ({ ...prev, ...sets }));
                 
-                // Filter out bad server entries (Ghost Box Fix)
+                // Filter out empty/ghost servers
                 const plexServers = (srvs.plex || []).filter(s => s.name && s.name.trim() !== "");
                 setServers(plexServers);
 
+                // Load Libraries
                 const libMap = {};
                 await Promise.all(plexServers.map(async (server) => {
                     try {
@@ -80,6 +82,16 @@ const Settings = () => {
         window.location.reload();
     };
 
+    const handleTestServer = async (server) => {
+        setTestResults(prev => ({ ...prev, [server.id]: 'Testing...' }));
+        try {
+            const res = await apiPost("/settings/test/plex", { token: server.token, url: server.url });
+            setTestResults(prev => ({ ...prev, [server.id]: res.status === 'success' ? '✅ OK' : '❌ Fail' }));
+        } catch (e) {
+            setTestResults(prev => ({ ...prev, [server.id]: '❌ Error' }));
+        }
+    };
+
     const handleLibraryCheckbox = (serverName, libId) => {
         const uniqueId = `${serverName}__${libId}`;
         const current = settings.default_library_ids || [];
@@ -96,9 +108,6 @@ const Settings = () => {
             {/* 1. FINANCIALS & SCANNING */}
             <div className="card" style={{marginBottom:'20px'}}>
                 <h3>Financials & Scanning</h3>
-                <p className="small" style={{color:'var(--text-muted)', marginBottom:'15px'}}>
-                    Set standard dues to calculate "Paid Thru" dates.
-                </p>
                 <div className="flex" style={{gap:'20px', marginBottom:'15px'}}>
                     <div style={{flex:1}}>
                         <label className="small">Monthly Fee ($)</label>
@@ -113,12 +122,11 @@ const Settings = () => {
                         <input className="input" type="number" value={settings.scan_interval_min} onChange={e=>setSettings({...settings, scan_interval_min: parseInt(e.target.value)})} />
                     </div>
                 </div>
-
-                <label className="small" style={{marginTop:'10px', display:'block'}}>Email Search Terms (Subject Line)</label>
+                <label className="small">Email Search Terms</label>
                 <div className="flex" style={{gap:'10px', marginTop:'5px'}}>
-                    <input className="input" placeholder="Venmo Term" value={settings.venmo_search_term} onChange={e=>setSettings({...settings, venmo_search_term: e.target.value})} />
-                    <input className="input" placeholder="PayPal Term" value={settings.paypal_search_term} onChange={e=>setSettings({...settings, paypal_search_term: e.target.value})} />
-                    <input className="input" placeholder="Zelle Term" value={settings.zelle_search_term} onChange={e=>setSettings({...settings, zelle_search_term: e.target.value})} />
+                    <input className="input" placeholder="Venmo" value={settings.venmo_search_term} onChange={e=>setSettings({...settings, venmo_search_term: e.target.value})} />
+                    <input className="input" placeholder="PayPal" value={settings.paypal_search_term} onChange={e=>setSettings({...settings, paypal_search_term: e.target.value})} />
+                    <input className="input" placeholder="Zelle" value={settings.zelle_search_term} onChange={e=>setSettings({...settings, zelle_search_term: e.target.value})} />
                 </div>
             </div>
 
@@ -133,9 +141,11 @@ const Settings = () => {
                                 <td>{s.name}</td>
                                 <td>{s.url || 'Auto'}</td>
                                 <td>
-                                    <div className="flex" style={{gap:'5px'}}>
+                                    <div className="flex" style={{gap:'5px', alignItems:'center'}}>
+                                        <button className="button" style={{padding:'4px', fontSize:'0.7rem', backgroundColor:'#64748b'}} onClick={()=>handleTestServer(s)}>Test</button>
                                         <button className="button" style={{padding:'4px', fontSize:'0.7rem'}} onClick={()=>{setServerForm(s); setIsEditingServer(true);}}>Edit</button>
                                         <button className="button" style={{padding:'4px', fontSize:'0.7rem', backgroundColor:'var(--danger)'}} onClick={()=>handleDeleteServer(s.id)}>Del</button>
+                                        {testResults[s.id] && <span className="small">{testResults[s.id]}</span>}
                                     </div>
                                 </td>
                             </tr>
@@ -157,23 +167,15 @@ const Settings = () => {
                 </div>
             </div>
 
-            {/* 3. ACCESS CONTROL & AUTOMATION */}
+            {/* 3. ACCESS CONTROL */}
             <div className="card" style={{marginBottom:'20px'}}>
                 <div className="flex" style={{justifyContent:'space-between', marginBottom:'15px'}}>
                     <h3>Access Control</h3>
                     <div className="flex" style={{gap:'15px'}}>
-                        <label style={{display:'flex', alignItems:'center', gap:'5px', cursor:'pointer'}}>
-                            <input type="checkbox" checked={settings.plex_auto_ban} onChange={e=>setSettings({...settings, plex_auto_ban: e.target.checked})} />
-                            <span className="small">Auto-Ban</span>
-                        </label>
-                        <label style={{display:'flex', alignItems:'center', gap:'5px', cursor:'pointer'}}>
-                            <input type="checkbox" checked={settings.plex_auto_invite} onChange={e=>setSettings({...settings, plex_auto_invite: e.target.checked})} />
-                            <span className="small">Auto-Invite</span>
-                        </label>
+                        <label style={{display:'flex', alignItems:'center', gap:'5px'}}><input type="checkbox" checked={settings.plex_auto_ban} onChange={e=>setSettings({...settings, plex_auto_ban: e.target.checked})} /><span className="small">Auto-Ban</span></label>
+                        <label style={{display:'flex', alignItems:'center', gap:'5px'}}><input type="checkbox" checked={settings.plex_auto_invite} onChange={e=>setSettings({...settings, plex_auto_invite: e.target.checked})} /><span className="small">Auto-Invite</span></label>
                     </div>
                 </div>
-                
-                <p className="small" style={{color:'var(--text-muted)', marginBottom:'10px'}}>Select libraries to share automatically.</p>
                 {servers.map(server => (
                     <div key={server.id} style={{marginBottom: '10px', padding: '10px', border: '1px solid var(--border)', borderRadius: '8px'}}>
                         <strong>{server.name}</strong>
