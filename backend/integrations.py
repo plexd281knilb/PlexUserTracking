@@ -20,7 +20,6 @@ def get_email_body(msg):
     return ""
 
 def get_email_subject(msg):
-    """Decodes the email subject, handling RFC 2047 encoding."""
     subject_header = msg.get("Subject", "")
     if not subject_header:
         return ""
@@ -36,7 +35,7 @@ def get_email_subject(msg):
             subject += str(token)
     return subject.strip()
 
-# --- Payment Processing Logic ---
+# --- Payment Processing ---
 def process_payment(users, sender_name, amount_str, date_obj, service_name, existing_logs=None, save_db=True):
     date_str = datetime.now().strftime('%Y-%m-%d')
     try:
@@ -56,6 +55,7 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
         
     raw_text = f"{sender_name} sent {amount_str}"
     log_entry = None
+    is_new_entry = False
     
     for log in existing_logs:
         if log.get('raw_text') == raw_text and log.get('date') == date_str:
@@ -63,6 +63,7 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
             break
     
     if not log_entry:
+        is_new_entry = True
         log_entry = {
             "date": date_str,
             "service": service_name,
@@ -107,7 +108,7 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
         save_data('payment_logs', existing_logs)
         save_users(users)
         
-    return match_found
+    return is_new_entry
 
 def remap_existing_payments():
     users = load_users()
@@ -122,18 +123,24 @@ def remap_existing_payments():
     save_users(users)
     return count
 
-# --- PLEX LOGIC (FIXED) ---
+# --- PLEX LOGIC ---
 def modify_plex_access(user, enable=True):
+    print(f"--- Modifying Access: {user['username']} -> {enable} ---")
     settings = load_settings()
     
     if not enable and user.get('payment_freq') == 'Exempt': 
-        return [f"Skipped {user.get('username')}: User is Exempt"]
+        print("User is Exempt. Skipping.")
+        return [f"Skipped {user.get('username')}: Exempt"]
 
     auto_ban = settings.get('plex_auto_ban', True)
     auto_invite = settings.get('plex_auto_invite', True)
 
-    if not enable and not auto_ban: return ["Skipped: Auto-Ban is disabled"]
-    if enable and not auto_invite: return ["Skipped: Auto-Invite is disabled"]
+    if not enable and not auto_ban: 
+        print("Auto-Ban Disabled. Skipping.")
+        return ["Skipped: Auto-Ban Disabled"]
+    if enable and not auto_invite: 
+        print("Auto-Invite Disabled. Skipping.")
+        return ["Skipped: Auto-Invite Disabled"]
 
     # Parse Config
     raw_config = settings.get('default_library_ids', [])
@@ -144,13 +151,12 @@ def modify_plex_access(user, enable=True):
             srv_name, lib_id = item.split("__", 1)
             if srv_name not in server_libs_map: 
                 server_libs_map[srv_name] = []
-            server_libs_map[srv_name].append(lib_id)
+            server_libs_map[srv_name].append(int(lib_id)) # Convert to INT
 
     servers = load_servers()['plex']
     results = []
 
     for server in servers:
-        # If enabling, skip servers that have no libraries selected
         if enable and server['name'] not in server_libs_map: 
             continue
 
@@ -171,36 +177,46 @@ def modify_plex_access(user, enable=True):
                 except: pass
 
             if not machine_id:
-                results.append(f"{server['name']}: Could not find Machine ID")
+                print(f"Could not find Machine ID for {server['name']}")
+                results.append(f"{server['name']}: No Machine ID")
                 continue
 
-            # 2. Check for Existing User (Needed for Disable, Helpful for Enable)
+            # 2. Find User (Check by Email OR Username)
             plex_user_id = None
             try:
                 r = requests.get('https://plex.tv/api/users', headers=headers)
                 if r.status_code == 200:
                     root = ET.fromstring(r.content)
+                    target_email = user.get('email', '').lower()
+                    target_user = user.get('username', '').lower()
+                    
                     for u in root.findall('User'):
-                        if u.get('email', '').lower() == user['email'].lower() or \
-                           u.get('username', '').lower() == user.get('username', '').lower():
-                            plex_user_id = u.get('id'); break
-            except: pass
-            
+                        u_email = u.get('email', '').lower()
+                        u_name = u.get('username', '').lower()
+                        
+                        if (target_email and u_email == target_email) or \
+                           (target_user and u_name == target_user):
+                            plex_user_id = u.get('id')
+                            break
+            except Exception as e:
+                print(f"Error searching users: {e}")
+
+            # 3. Perform Action
             if not enable:
-                # --- DISABLE LOGIC ---
+                # DISABLE
                 if plex_user_id:
                     requests.delete(f"https://plex.tv/api/friends/{plex_user_id}", headers=headers)
+                    print(f"Removed friend {plex_user_id} from {server['name']}")
                     results.append(f"{server['name']}: Access Revoked")
                 else:
                     results.append(f"{server['name']}: User not found (Already disabled?)")
             else:
-                # --- ENABLE LOGIC ---
+                # ENABLE
                 lib_ids = server_libs_map.get(server['name'], [])
                 if not lib_ids:
-                    results.append(f"{server['name']}: No libraries configured")
+                    results.append(f"{server['name']}: No libraries")
                     continue
 
-                # Invite payload (Works even if user is not yet a friend)
                 payload = { 
                     "server_id": machine_id, 
                     "shared_server": { 
@@ -209,13 +225,19 @@ def modify_plex_access(user, enable=True):
                     } 
                 }
                 
+                print(f"Inviting {user['email']} to {server['name']} with libs {lib_ids}")
                 resp = requests.post(f"https://plex.tv/api/servers/{machine_id}/shared_servers", headers={'X-Plex-Token': token, 'Content-Type': 'application/json', 'Accept': 'application/json'}, json=payload)
+                
                 if resp.status_code in [200, 201]:
                     results.append(f"{server['name']}: Access Granted")
                 else:
-                    results.append(f"{server['name']}: Grant Failed ({resp.status_code})")
+                    print(f"Invite failed: {resp.text}")
+                    results.append(f"{server['name']}: Failed ({resp.status_code})")
 
-        except Exception as e: results.append(f"{server['name']}: Error {str(e)}")
+        except Exception as e: 
+            print(f"Server Error: {e}")
+            results.append(f"{server['name']}: Error {str(e)}")
+            
     return results
 
 def get_plex_libraries(token, manual_url=None):
@@ -245,7 +267,6 @@ def fetch_venmo_payments():
     payment_count = 0
     errors = []
     venmo_pattern = re.compile(r"^(.*?) paid you (\$\d+\.\d{2})", re.IGNORECASE)
-    
     for acc in accounts:
         if not acc.get('enabled', True): continue
         mail = None
@@ -282,7 +303,6 @@ def fetch_paypal_payments():
     payment_count = 0
     errors = []
     paypal_pattern = re.compile(r"(.*?)\s+sent\s+you\s+(\$\d+\.\d{2})\s+USD", re.IGNORECASE)
-    
     for acc in accounts:
         if not acc.get('enabled', True): continue
         mail = None
@@ -321,7 +341,6 @@ def fetch_zelle_payments():
     payment_count = 0
     errors = []
     zelle_pattern = re.compile(r"received (\$\d+\.\d{2}) from ([A-Za-z ]+)")
-    
     for acc in accounts:
         if not acc.get('enabled', True): continue
         mail = None
