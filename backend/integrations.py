@@ -438,4 +438,4 @@ def test_email_connection(host, port, email_user, email_pass):
         mail.logout()
         return {"status": "success", "message": "Connection Successful"}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": str(e)} 
