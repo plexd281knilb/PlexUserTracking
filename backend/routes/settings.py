@@ -1,6 +1,6 @@
 ﻿from flask import Blueprint, jsonify, request
 from database import load_settings, save_settings, load_servers, save_servers, add_server, delete_server
-from integrations import test_plex_connection, test_tautulli_connection, get_plex_libraries
+from integrations import test_plex_connection, get_plex_libraries
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/api/settings')
 
@@ -30,7 +30,6 @@ def add_new_server(type):
 
 @settings_bp.route('/servers/<type>/<int:server_id>', methods=['PUT'])
 def update_server_route(type, server_id):
-    """Updates an existing server's details."""
     data = request.json
     all_servers = load_servers()
     
@@ -62,28 +61,21 @@ def test_plex():
     token = request.json.get('token')
     return jsonify(test_plex_connection(token))
 
-@settings_bp.route('/test/tautulli', methods=['POST'])
-def test_tautulli():
-    url = request.json.get('url')
-    key = request.json.get('key')
-    return jsonify(test_tautulli_connection(url, key))
-
 @settings_bp.route('/plex/libraries', methods=['POST'])
 def fetch_libraries():
     token = request.json.get('token')
-    manual_url = request.json.get('url') # <--- Get URL from request
+    manual_url = request.json.get('url')
     
     if not token:
         servers = load_servers().get('plex', [])
         if servers:
             token = servers[0]['token']
-            # If the saved server has a URL, use it
             if not manual_url and 'url' in servers[0]:
                 manual_url = servers[0]['url']
         else:
             return jsonify({'error': 'No token provided'}), 400
 
-    result = get_plex_libraries(token, manual_url) # <--- Pass it here
+    result = get_plex_libraries(token, manual_url)
     if 'error' in result:
         return jsonify(result), 500
     

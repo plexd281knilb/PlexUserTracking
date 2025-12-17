@@ -21,22 +21,19 @@ def get_email_body(msg):
 
 # --- Payment Processing Logic ---
 def process_payment(users, sender_name, amount_str, date_obj, service_name, existing_logs=None, save_db=True):
-    # FIXED: Date Normalization to YYYY-MM-DD
+    # FIXED: Normalize Date to YYYY-MM-DD
     date_str = datetime.now().strftime('%Y-%m-%d')
     try:
         if isinstance(date_obj, str):
-            # Try parsing email date (RFC 2822)
             date_tuple = email.utils.parsedate_tz(date_obj)
             if date_tuple:
                 local_date = datetime.fromtimestamp(email.utils.mktime_tz(date_tuple))
                 date_str = local_date.strftime('%Y-%m-%d')
-            # Check if already YYYY-MM-DD
             elif re.match(r"\d{4}-\d{2}-\d{2}", date_obj):
                 date_str = date_obj
         else:
             date_str = date_obj.strftime('%Y-%m-%d')
-    except:
-        pass 
+    except: pass 
 
     if existing_logs is None:
         existing_logs = load_payment_logs()
@@ -218,7 +215,6 @@ def get_plex_libraries(token, manual_url=None):
 def fetch_venmo_payments():
     settings = load_settings()
     search_term = settings.get('venmo_search_term', 'paid you')
-    
     accounts = load_payment_accounts('venmo')
     users = load_users()
     payment_count = 0
@@ -234,7 +230,6 @@ def fetch_venmo_payments():
             mail.login(account['email'], account['password'])
             mail.select('inbox')
 
-            # Use configured search term
             criteria = f'(SUBJECT "{search_term}")'
             if "venmo.com" in account['email'] or "gmail" in account['imap_server']:
                 criteria = f'(FROM "venmo@venmo.com" {criteria})'
@@ -269,7 +264,6 @@ def fetch_venmo_payments():
 def fetch_paypal_payments():
     settings = load_settings()
     search_term = settings.get('paypal_search_term', 'sent you')
-    
     accounts = load_payment_accounts('paypal')
     users = load_users()
     payment_count = 0
@@ -316,7 +310,6 @@ def fetch_paypal_payments():
 def fetch_zelle_payments():
     settings = load_settings()
     search_term = settings.get('zelle_search_term', 'received')
-    
     accounts = load_payment_accounts('zelle')
     users = load_users()
     payment_count = 0
@@ -343,7 +336,6 @@ def fetch_zelle_payments():
                     
                     match = zelle_pattern.search(body)
                     if match:
-                        # Zelle regex usually: group 2 is name, group 1 is amount
                         if process_payment(users, match.group(2).strip(), match.group(1), msg["Date"], 'Zelle'):
                             payment_count += 1
             
@@ -363,7 +355,6 @@ def fetch_zelle_payments():
 
 # --- Utils ---
 def fetch_all_plex_users():
-    # Import logic directly here to be self-contained
     servers = load_servers()['plex']
     users = load_users()
     count = 0
