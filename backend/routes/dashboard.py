@@ -1,45 +1,74 @@
-﻿from flask import Blueprint, jsonify
-from database import load_users, load_expenses, load_payment_accounts
-from datetime import datetime
+﻿import json
+import os
 
-dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/api/dashboard')
+# Define data directory relative to this file
+DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
 
-@dashboard_bp.route('/summary', methods=['GET'])
-def summary():
-    users = load_users()
-    expenses = load_expenses()
-    
-    # 1. User Stats
-    total_users = len(users)
-    active_users = sum(1 for u in users if u.get('status') == 'Active')
-    
-    # 2. Income Calculation (Placeholder logic: assume $5/mo per active user)
-    # You can make this configurable in settings later
-    PRICE_PER_USER = 5.00 
-    income_mo = active_users * PRICE_PER_USER
-    
-    # 3. Expense Calculation
-    current_year = datetime.now().year
-    expense_yr = sum(e['amount'] for e in expenses if str(current_year) in e.get('date', ''))
+FILES = {
+    'users': os.path.join(DATA_DIR, 'users.json'),
+    'payment_logs': os.path.join(DATA_DIR, 'payment_logs.json'),
+    'settings': os.path.join(DATA_DIR, 'settings.json'),
+    'servers': os.path.join(DATA_DIR, 'servers.json'),
+    'payment_accounts': os.path.join(DATA_DIR, 'payment_accounts.json'),
+    'expenses': os.path.join(DATA_DIR, 'expenses.json')
+}
 
-    # 4. Recent Activity (Combine recent payments and added users)
-    activity = []
+def load_data(key, default=None):
+    filepath = FILES.get(key)
+    if not filepath: return default
+    if not os.path.exists(filepath):
+        # Create empty file if not exists
+        with open(filepath, 'w') as f:
+            json.dump(default if default is not None else [], f, indent=4)
+        return default if default is not None else []
+    try:
+        with open(filepath, 'r') as f:
+            return json.load(f)
+    except:
+        return default if default is not None else []
+
+def save_data(key, data):
+    filepath = FILES.get(key)
+    if filepath:
+        with open(filepath, 'w') as f:
+            json.dump(data, f, indent=4)
+
+# --- Type-Specific Helpers ---
+
+def load_users():
+    return load_data('users', [])
+
+def save_users(users):
+    save_data('users', users)
+
+def load_payment_logs():
+    return load_data('payment_logs', [])
+
+def load_settings():
+    return load_data('settings', {})
+
+def save_settings(settings):
+    save_data('settings', settings)
+
+def load_servers():
+    return load_data('servers', {"plex": [], "tautulli": {}})
+
+def load_payment_accounts(type_filter=None):
+    accounts = load_data('payment_accounts', [])
+    if type_filter:
+        return [acc for acc in accounts if acc.get('type') == type_filter]
+    return accounts
+
+def save_payment_accounts(type_key, updated_list):
+    # This helper merges updates into the main list
+    all_accounts = load_data('payment_accounts', [])
+    # Remove old entries of this type
+    others = [acc for acc in all_accounts if acc.get('type') != type_key]
+    # Add new entries (ensure type is set)
+    for acc in updated_list:
+        acc['type'] = type_key
     
-    # Add recent payments (from user last_paid)
-    for u in users:
-        if u.get('last_paid'):
-            activity.append({
-                'date': u['last_paid'],
-                'desc': f"Payment received from {u['name']}"
-            })
-            
-    # Sort by date descending and take top 5
-    activity.sort(key=lambda x: x['date'], reverse=True)
-    
-    return jsonify({
-        'total_users': total_users,
-        'active_users': active_users,
-        'income_mo': income_mo,
-        'expense_yr': expense_yr,
-        'recent_activity': activity[:5]
-    })
+    final_list = others + updated_list
+    save_data('payment_accounts', final_list)

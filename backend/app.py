@@ -3,11 +3,10 @@ import atexit
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
-# Import your automation file (ensure backend/automation.py exists)
 from automation import check_automation
 
-# 1. ROBUST PATH FINDING
-# Finds the React build folder no matter where Docker puts it
+# --- 1. PATH CONFIGURATION ---
+# Robustly find the frontend build folder
 current_dir = os.getcwd()
 possible_paths = [
     os.path.join(current_dir, '..', 'frontend', 'build'),
@@ -26,8 +25,8 @@ for path in possible_paths:
 app = Flask(__name__, static_folder=FRONTEND_FOLDER)
 CORS(app)
 
-# 2. SETUP SCHEDULER
-# Runs the daily check (Reminders/Disabling) every day at 9:00 AM
+# --- 2. SCHEDULER (Automation) ---
+# Runs the check every day at 9:00 AM
 try:
     scheduler = BackgroundScheduler()
     scheduler.add_job(func=check_automation, trigger="cron", hour=9)
@@ -36,14 +35,14 @@ try:
 except Exception as e:
     print(f"Scheduler failed to start: {e}")
 
-# 3. REGISTER BLUEPRINTS
+# --- 3. REGISTER BLUEPRINTS ---
 from routes.users import users_bp
 from routes.settings import settings_bp
 from routes.dashboard import dashboard_bp
 from routes.payments import payments_bp
 from routes.logs import logs_bp
 from routes.expenses import expenses_bp
-from routes.upcoming import upcoming_bp  # <--- IMPORTED
+from routes.upcoming import upcoming_bp
 
 app.register_blueprint(users_bp)
 app.register_blueprint(settings_bp)
@@ -51,22 +50,22 @@ app.register_blueprint(dashboard_bp)
 app.register_blueprint(payments_bp)
 app.register_blueprint(logs_bp)
 app.register_blueprint(expenses_bp)
-app.register_blueprint(upcoming_bp)      # <--- REGISTERED
+app.register_blueprint(upcoming_bp)
 
-# 4. THE CATCH-ALL ROUTE
-# This function handles EVERY URL that isn't an API endpoint.
+# --- 4. CATCH-ALL ROUTE (CRITICAL FIX) ---
+# This handles refreshes on pages like /settings or /users
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
-    # A. If it's an API call that failed, return 404 (don't serve HTML)
+    # API calls should return JSON or 404
     if path.startswith('api/'):
         return jsonify(error="API endpoint not found"), 404
 
-    # B. If the browser is asking for a real file (like logo.png), serve it
+    # Serve static files (like logo.png, manifest.json) if they exist
     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
     
-    # C. FOR EVERYTHING ELSE (Users, Settings, etc.): Serve index.html
+    # Otherwise, serve the React App (index.html)
     return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':

@@ -1,9 +1,10 @@
-﻿from flask import Blueprint, jsonify, request
-from database import load_settings, save_settings, load_servers, save_servers, add_server, delete_server
-from integrations import test_plex_connection, get_plex_libraries
+﻿from flask import Blueprint, request, jsonify
+from database import load_settings, save_settings, load_servers, save_data, load_data
+from integrations import get_plex_libraries, test_plex_connection
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/api/settings')
 
+# --- GENERAL SETTINGS ---
 @settings_bp.route('', methods=['GET'])
 def get_settings():
     return jsonify(load_settings())
@@ -11,69 +12,60 @@ def get_settings():
 @settings_bp.route('', methods=['POST'])
 def update_settings():
     data = request.json
-    current_settings = load_settings()
-    
-    # Update only provided fields, keep existing ones (like search terms)
-    current_settings.update(data)
-    
-    save_settings(current_settings)
-    return jsonify({'message': 'Settings updated', 'settings': current_settings})
+    current = load_settings()
+    # Merge new data into existing settings
+    current.update(data)
+    save_settings(current)
+    return jsonify({'message': 'Settings saved successfully'})
 
-# --- Server Routes (Keep existing logic) ---
+# --- PLEX SERVER MANAGEMENT ---
 @settings_bp.route('/servers', methods=['GET'])
 def get_servers():
     return jsonify(load_servers())
 
-@settings_bp.route('/servers/<type>', methods=['POST'])
-def add_new_server(type):
+@settings_bp.route('/servers/plex', methods=['POST'])
+def add_plex_server():
     data = request.json
-    if not data: return jsonify({'error': 'No data'}), 400
-    result = add_server(type, data)
-    return jsonify({'message': 'Server added', 'server': result})
+    servers = load_servers()
+    new_server = {
+        "id": max([s.get('id', 0) for s in servers['plex']] + [0]) + 1,
+        "name": data.get('name'),
+        "token": data.get('token'),
+        "url": data.get('url', '')
+    }
+    servers['plex'].append(new_server)
+    save_data('servers', servers)
+    return jsonify({'message': 'Server added', 'server': new_server})
 
-@settings_bp.route('/servers/<type>/<int:server_id>', methods=['PUT'])
-def update_server_route(type, server_id):
+@settings_bp.route('/servers/plex/<int:server_id>', methods=['PUT'])
+def update_plex_server(server_id):
     data = request.json
-    all_servers = load_servers()
-    if type not in all_servers: return jsonify({'error': 'Invalid server type'}), 400
-    
-    found = False
-    for s in all_servers[type]:
+    servers = load_servers()
+    for s in servers['plex']:
         if s['id'] == server_id:
-            s.update(data) # Generic update
-            found = True
-            break
-            
-    if found:
-        save_servers(all_servers)
-        return jsonify({'message': 'Server updated successfully'})
+            s.update(data)
+            save_data('servers', servers)
+            return jsonify({'message': 'Server updated'})
     return jsonify({'error': 'Server not found'}), 404
 
-@settings_bp.route('/servers/<type>/<int:server_id>', methods=['DELETE'])
-def remove_server(type, server_id):
-    delete_server(type, server_id)
+@settings_bp.route('/servers/plex/<int:server_id>', methods=['DELETE'])
+def delete_plex_server(server_id):
+    servers = load_servers()
+    servers['plex'] = [s for s in servers['plex'] if s['id'] != server_id]
+    save_data('servers', servers)
     return jsonify({'message': 'Server removed'})
 
-@settings_bp.route('/test/plex', methods=['POST'])
-def test_plex():
-    token = request.json.get('token')
-    return jsonify(test_plex_connection(token))
-
+# --- UTILS ---
 @settings_bp.route('/plex/libraries', methods=['POST'])
-def fetch_libraries():
-    token = request.json.get('token')
-    manual_url = request.json.get('url')
-    
-    if not token:
-        servers = load_servers().get('plex', [])
-        if servers:
-            token = servers[0]['token']
-            if not manual_url and 'url' in servers[0]:
-                manual_url = servers[0]['url']
-        else:
-            return jsonify({'error': 'No token provided'}), 400
+def list_libraries():
+    data = request.json
+    res = get_plex_libraries(data.get('token'), data.get('url'))
+    if "error" in res:
+        return jsonify(res), 400
+    return jsonify(res)
 
-    result = get_plex_libraries(token, manual_url)
-    if 'error' in result:
-        return jsonify(result), 500
-    return jsonify(result)
+@settings_bp.route('/test/plex', methods=['POST'])
+def test_connection():
+    data = request.json
+    res = test_plex_connection(data.get('token'), data.get('url'))
+    return jsonify(res)
