@@ -166,6 +166,7 @@ const Users = () => {
                             <th style={{width: '40px'}}><input type="checkbox" onChange={handleSelectAll} checked={users.length > 0 && selectedIds.length === users.length} /></th>
                             <th>Username</th>
                             <th>Full Name</th>
+                            <th>Email</th>
                             <th>Frequency</th>
                             <th>Status</th>
                             <th>Last Paid</th>
@@ -179,6 +180,7 @@ const Users = () => {
                                 <td style={{textAlign: 'center'}}><input type="checkbox" checked={selectedIds.includes(u.id)} onChange={() => handleSelectRow(u.id)} /></td>
                                 <td style={{fontWeight:'bold'}}>{u.username}</td>
                                 <td>{u.full_name || '-'}</td>
+                                <td style={{fontSize:'0.85rem', color:'#94a3b8'}}>{u.email}</td>
                                 <td><span style={{fontSize:'0.75rem', padding:'2px 6px', borderRadius:'4px', backgroundColor: getFreqBadgeColor(u.payment_freq), color: u.payment_freq === 'Exempt' ? 'black' : 'white', fontWeight: 'bold'}}>{u.payment_freq || 'Exempt'}</span></td>
                                 <td><span style={{color: u.status === 'Active' ? '#10b981' : '#ef4444', fontWeight: 'bold'}}>{u.status}</span></td>
                                 <td>{u.last_paid || 'Never'}{u.last_payment_amount && <span style={{marginLeft: '8px', fontSize: '0.75rem', color: '#10b981', padding: '2px 5px'}}>({u.last_payment_amount})</span>}</td>
