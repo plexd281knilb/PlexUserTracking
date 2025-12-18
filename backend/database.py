@@ -19,6 +19,7 @@ def load_data(key, default=None):
     filepath = FILES.get(key)
     if not filepath: return default
     if not os.path.exists(filepath):
+        # Create empty file if not exists
         with open(filepath, 'w') as f:
             json.dump(default if default is not None else [], f, indent=4)
         return default if default is not None else []
@@ -45,6 +46,15 @@ def save_users(users):
 def load_payment_logs():
     return load_data('payment_logs', [])
 
+def save_payment_log(log_entry):
+    # Helper to save a single log or a list of logs
+    if isinstance(log_entry, list):
+        save_data('payment_logs', log_entry)
+    else:
+        logs = load_data('payment_logs', [])
+        logs.append(log_entry)
+        save_data('payment_logs', logs)
+
 def load_settings():
     return load_data('settings', {})
 
@@ -60,7 +70,7 @@ def load_expenses():
 def load_payment_accounts(type_filter=None):
     accounts = load_data('payment_accounts', [])
     if type_filter:
-        # Case-insensitive comparison
+        # Case-insensitive match (e.g. "venmo" == "Venmo")
         tf = type_filter.lower()
         return [acc for acc in accounts if acc.get('type', '').lower() == tf]
     return accounts
@@ -71,7 +81,7 @@ def save_payment_accounts(type_key, updated_list):
     tf = type_key.lower()
     others = [acc for acc in all_accounts if acc.get('type', '').lower() != tf]
     
-    # Add new entries
+    # Ensure type is set correctly on new entries
     for acc in updated_list:
         acc['type'] = type_key 
     

@@ -8,6 +8,7 @@ from datetime import datetime
 from email.header import decode_header
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+# FIXED IMPORT: Matches database.py exports exactly
 from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, save_payment_log, load_settings, save_data, load_payment_logs
 
 # --- HELPER FUNCTIONS ---
@@ -74,8 +75,14 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
     if existing_logs is None: existing_logs = load_payment_logs()
     
     raw_text = f"{sender_name} sent {amount_str}"
-    log_entry = next((l for l in existing_logs if l.get('raw_text') == raw_text), None)
     
+    # Check for duplicates
+    log_entry = None
+    for log in existing_logs:
+        if log.get('raw_text') == raw_text and log.get('date') == date_str:
+            log_entry = log
+            break
+            
     if not log_entry:
         log_entry = { "date": date_str, "service": service_name, "sender": sender_name, "amount": amount_str, "raw_text": raw_text, "status": "Unmapped", "mapped_user": None }
         existing_logs.insert(0, log_entry)
@@ -117,11 +124,13 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
 def fetch_venmo_payments():
     settings = load_settings()
     search_term = settings.get('venmo_search_term', 'paid you')
-    accounts = load_payment_accounts('Venmo') # Capitalized matches Frontend
+    accounts = load_payment_accounts('Venmo') 
     users = load_users()
     count = 0
     errors = []
+    
     venmo_pattern = re.compile(r"^(.*?) paid you (\$\d+\.\d{2})", re.IGNORECASE)
+
     for acc in accounts:
         if not acc.get('enabled', True): continue
         mail = None
@@ -129,8 +138,10 @@ def fetch_venmo_payments():
             mail = imaplib.IMAP4_SSL(acc['imap_server'], acc['port'])
             mail.login(acc['email'], acc['password'])
             mail.select('inbox')
+            
             criteria = f'(SUBJECT "{search_term}")'
             if "venmo.com" in acc['email']: criteria = f'(FROM "venmo@venmo.com" {criteria})'
+            
             status, messages = mail.search(None, criteria)
             if status == 'OK':
                 for e_id in messages[0].split()[-50:]:
@@ -143,6 +154,7 @@ def fetch_venmo_payments():
             if mail: 
                 try: mail.logout()
                 except: pass
+                
     save_users(users)
     save_payment_accounts('Venmo', accounts)
     return {"count": count, "errors": errors}
@@ -150,11 +162,13 @@ def fetch_venmo_payments():
 def fetch_paypal_payments():
     settings = load_settings()
     search_term = settings.get('paypal_search_term', 'sent you')
-    accounts = load_payment_accounts('PayPal') # Capitalized
+    accounts = load_payment_accounts('PayPal')
     users = load_users()
     count = 0
     errors = []
+    
     paypal_pattern = re.compile(r"(.*?)\s+sent\s+you\s+(\$\d+\.\d{2})\s+USD", re.IGNORECASE)
+
     for acc in accounts:
         if not acc.get('enabled', True): continue
         mail = None
@@ -175,6 +189,7 @@ def fetch_paypal_payments():
             if mail: 
                 try: mail.logout()
                 except: pass
+                
     save_users(users)
     save_payment_accounts('PayPal', accounts)
     return {"count": count, "errors": errors}
@@ -182,10 +197,11 @@ def fetch_paypal_payments():
 def fetch_zelle_payments():
     settings = load_settings()
     search_term = settings.get('zelle_search_term', 'received')
-    accounts = load_payment_accounts('Zelle') # Capitalized
+    accounts = load_payment_accounts('Zelle')
     users = load_users()
     count = 0
     errors = []
+    
     for acc in accounts:
         if not acc.get('enabled', True): continue
         mail = None
@@ -206,6 +222,7 @@ def fetch_zelle_payments():
             if mail: 
                 try: mail.logout()
                 except: pass
+                
     save_users(users)
     save_payment_accounts('Zelle', accounts)
     return {"count": count, "errors": errors}
@@ -214,7 +231,6 @@ def fetch_zelle_payments():
 def fetch_all_plex_users():
     servers = load_servers()['plex']
     current_db_users = load_users()
-    
     active_plex_friends = {} 
     
     for server in servers:
@@ -254,13 +270,8 @@ def fetch_all_plex_users():
         if email not in existing_emails:
             max_id += 1
             final_users_list.append({
-                "id": max_id,
-                "username": p_data['username'],
-                "email": email,
-                "full_name": "",
-                "status": "Pending",
-                "payment_freq": "Exempt",
-                "last_paid": "Never"
+                "id": max_id, "username": p_data['username'], "email": email,
+                "full_name": "", "status": "Pending", "payment_freq": "Exempt", "last_paid": "Never"
             })
             added_count += 1
             
