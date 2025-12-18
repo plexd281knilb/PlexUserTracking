@@ -54,7 +54,7 @@ def delete_plex_server(server_id):
     save_data('servers', servers)
     return jsonify({'message': 'Server removed'})
 
-# --- PAYMENT SCANNERS (IMAP ACCOUNTS) ---
+# --- PAYMENT SCANNERS ---
 @settings_bp.route('/payment_accounts', methods=['GET'])
 def get_payment_accounts():
     return jsonify(load_data('payment_accounts', []))
@@ -98,8 +98,7 @@ def test_email_route():
 def list_libraries():
     data = request.json
     res = get_plex_libraries(data.get('token'), data.get('url'))
-    if "error" in res:
-        return jsonify(res), 400
+    if "error" in res: return jsonify(res), 400
     return jsonify(res)
 
 @settings_bp.route('/test/plex', methods=['POST'])
