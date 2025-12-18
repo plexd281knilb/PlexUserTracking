@@ -52,10 +52,42 @@ def delete_service_account(service_type, acc_id):
 def delete_log():
     log_to_delete = request.json
     logs = load_payment_logs()
-    # Remove by matching raw_text and date
+    # Filter out exact match
     logs = [l for l in logs if not (l.get('raw_text') == log_to_delete.get('raw_text') and l.get('date') == log_to_delete.get('date'))]
     save_data('payment_logs', logs)
     return jsonify({'message': 'Log deleted'})
+
+@payments_bp.route('/split', methods=['POST'])
+def split_payment():
+    data = request.json
+    original = data.get('original')
+    splits = data.get('splits') # List of { amount: "180.00" }
+    
+    if not original or not splits:
+        return jsonify({'error': 'Invalid data'}), 400
+
+    logs = load_payment_logs()
+    # Find original log
+    target = next((l for l in logs if l.get('raw_text') == original.get('raw_text') and l.get('date') == original.get('date')), None)
+    
+    if not target:
+        return jsonify({'error': 'Original payment not found'}), 404
+        
+    # Mark original as Split (Persists it so scanners ignore it)
+    target['status'] = 'Split'
+    
+    # Create new split logs
+    for i, split in enumerate(splits):
+        new_log = target.copy()
+        new_log['amount'] = f"${split['amount']}" if '$' not in str(split['amount']) else split['amount']
+        new_log['status'] = 'Unmapped'
+        new_log['mapped_user'] = None
+        # Append identifier to raw_text so it's unique
+        new_log['raw_text'] = f"Split {i+1}: {target['raw_text']}"
+        logs.insert(0, new_log)
+        
+    save_data('payment_logs', logs)
+    return jsonify({'message': 'Payment split successfully'})
 
 @payments_bp.route('/remap', methods=['POST'])
 def remap_payments():
@@ -63,8 +95,7 @@ def remap_payments():
     logs = load_payment_logs()
     count = 0
     for log in logs:
-        if log.get('status') != 'Matched':
-            # Use save_db=False to avoid writing file on every loop
+        if log.get('status') != 'Matched' and log.get('status') != 'Split':
             if process_payment(users, log['sender'], log['amount'], log['date'], log['service'], existing_logs=logs, save_db=False):
                 count += 1
     save_users(users)
@@ -77,6 +108,5 @@ def manual_add():
     data = request.json
     users = load_users()
     logs = load_payment_logs()
-    # process_payment now handles date formatting automatically
     process_payment(users, data['sender'], data['amount'], data['date'], data['service'], existing_logs=logs, save_db=True)
     return jsonify({'message': 'Manual payment processed'})

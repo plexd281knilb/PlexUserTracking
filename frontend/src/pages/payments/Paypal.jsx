@@ -9,8 +9,12 @@ export default function Paypal() {
     const [searchTerm, setSearchTerm] = useState('');
     const [status, setStatus] = useState('');
     const [loading, setLoading] = useState(false);
+    
+    // Modals
     const [matchLog, setMatchLog] = useState(null);
+    const [splitLog, setSplitLog] = useState(null);
     const [selectedUserId, setSelectedUserId] = useState('');
+    const [splitAmounts, setSplitAmounts] = useState(['', '']);
 
     const fetchData = async () => {
         const [accs, logsData, usersData, settings] = await Promise.all([
@@ -71,6 +75,17 @@ export default function Paypal() {
         setMatchLog(null); fetchData();
     };
 
+    const handleSplitSubmit = async () => {
+        const splits = splitAmounts.map(a => ({ amount: a }));
+        if(splits.some(s => !s.amount)) { alert("Please enter all amounts"); return; }
+        try {
+            await apiPost("/payments/split", { original: splitLog, splits }, localStorage.getItem('admin_token'));
+            setSplitLog(null); setSplitAmounts(['', '']); fetchData();
+        } catch(e) { alert("Split failed"); }
+    };
+
+    const addSplitRow = () => setSplitAmounts([...splitAmounts, '']);
+
     return (
         <div className="card">
             <div className="flex" style={{justifyContent:'space-between'}}>
@@ -112,12 +127,17 @@ export default function Paypal() {
                     <thead><tr><th>Date</th><th>Sender</th><th>Amount</th><th>Status</th><th>User</th><th>Actions</th></tr></thead>
                     <tbody>
                         {logs.map((log, i) => (
-                            <tr key={i}>
+                            <tr key={i} style={{opacity: log.status === 'Split' ? 0.5 : 1}}>
                                 <td>{log.date}</td><td>{log.sender}</td><td>{log.amount}</td>
                                 <td>{log.status}</td><td>{log.mapped_user || '-'}</td>
                                 <td>
                                     <div className="flex" style={{gap:'5px'}}>
-                                        {log.status === 'Unmapped' && <button className="button" style={{backgroundColor:'#f59e0b', padding:'4px'}} onClick={()=>{setMatchLog(log); setSelectedUserId('');}}>Link</button>}
+                                        {log.status === 'Unmapped' && (
+                                            <>
+                                                <button className="button" style={{backgroundColor:'#f59e0b', padding:'4px'}} onClick={()=>{setMatchLog(log); setSelectedUserId('');}}>Link</button>
+                                                <button className="button" style={{backgroundColor:'#3b82f6', padding:'4px'}} onClick={()=>{setSplitLog(log); setSplitAmounts(['','']);}}>Split</button>
+                                            </>
+                                        )}
                                         <button className="button" style={{backgroundColor:'#ef4444', padding:'4px'}} onClick={()=>handleDeleteLog(log)}>Del</button>
                                     </div>
                                 </td>
@@ -127,8 +147,9 @@ export default function Paypal() {
                 </table>
             </div>
 
+            {/* MATCH MODAL */}
             {matchLog && (
-                <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, backgroundColor:'rgba(0,0,0,0.8)', display:'flex', justifyContent:'center', alignItems:'center'}}>
+                <div style={modalStyle}>
                     <div className="card" style={{minWidth:'400px'}}>
                         <h3>Link Payment</h3>
                         <p>Sender: <b>{matchLog.sender}</b> ({matchLog.amount})</p>
@@ -143,6 +164,40 @@ export default function Paypal() {
                     </div>
                 </div>
             )}
+
+            {/* SPLIT MODAL */}
+            {splitLog && (
+                <div style={modalStyle}>
+                    <div className="card" style={{minWidth:'400px'}}>
+                        <h3>Split Payment: {splitLog.amount}</h3>
+                        <p className="small">Original Sender: {splitLog.sender}</p>
+                        
+                        <div style={{marginTop:'15px', display:'grid', gap:'10px'}}>
+                            {splitAmounts.map((amt, idx) => (
+                                <div key={idx} className="flex" style={{gap:'10px', alignItems:'center'}}>
+                                    <label className="small">Part {idx+1}: $</label>
+                                    <input className="input" placeholder="0.00" value={amt} onChange={e => {
+                                        const newAmts = [...splitAmounts];
+                                        newAmts[idx] = e.target.value;
+                                        setSplitAmounts(newAmts);
+                                    }} />
+                                </div>
+                            ))}
+                        </div>
+                        <button className="button" style={{marginTop:'10px', fontSize:'0.8rem', backgroundColor:'#64748b'}} onClick={addSplitRow}>+ Add Split</button>
+
+                        <div className="flex" style={{marginTop:'20px', gap:'10px', justifyContent:'flex-end'}}>
+                            <button className="button" style={{backgroundColor:'#64748b'}} onClick={()=>setSplitLog(null)}>Cancel</button>
+                            <button className="button" onClick={handleSplitSubmit}>Save Splits</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
+
+const modalStyle = {
+    position:'fixed', top:0, left:0, right:0, bottom:0, backgroundColor:'rgba(0,0,0,0.8)',
+    display:'flex', justifyContent:'center', alignItems:'center', zIndex:1000
+};
