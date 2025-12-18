@@ -8,7 +8,7 @@ from datetime import datetime
 from email.header import decode_header
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-# FIXED IMPORT: Removed 'save_payment_log' to be safe
+# FIXED IMPORT: Removed 'save_payment_log' to prevent conflicts
 from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, load_settings, save_data, load_payment_logs
 
 # --- HELPER FUNCTIONS ---
@@ -69,7 +69,6 @@ def fetch_all_plex_users():
     active_plex_friends = {} 
     successful_connections = 0
 
-    # 1. Fetch live friend list
     for server in servers:
         token = server.get('token')
         if not token: continue
@@ -90,13 +89,11 @@ def fetch_all_plex_users():
     if successful_connections == 0 and len(servers) > 0:
         return {"added": 0, "removed": 0, "status": "Error: Could not connect to Plex"}
 
-    # 2. Rebuild User List
     final_users_list = []
     processed_keys = set()
     added_count = 0
     removed_count = 0
     
-    # Check existing
     for db_user in current_db_users:
         u_email = db_user.get('email', '').lower().strip()
         u_name = db_user.get('username', '').lower().strip()
@@ -114,7 +111,6 @@ def fetch_all_plex_users():
         else:
             removed_count += 1
             
-    # Add new
     max_id = max([u.get('id', 0) for u in final_users_list] + [0])
     for key, p_data in active_plex_friends.items():
         if key not in processed_keys:
