@@ -53,6 +53,7 @@ def send_notification_email(to_email, subject, body):
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
 
+        # Standard SSL connection
         server = smtplib.SMTP_SSL(host, int(port))
         server.login(user, password)
         server.send_message(msg)
@@ -90,7 +91,9 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
             user['last_paid'] = date_str
             user['last_payment_amount'] = amount_str
             
-            if user['status'] != 'Active': user['status'] = 'Active'
+            # Simple Status Update (No Plex Logic)
+            if user['status'] != 'Active':
+                user['status'] = 'Active'
                 
             log_entry['status'] = "Matched"
             log_entry['mapped_user'] = user['username']
@@ -106,7 +109,6 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
                                 .replace('{amount}', amount_str)
                 
                 send_notification_email(user['email'], subject, body)
-            
             break
     
     if save_db:
@@ -120,7 +122,7 @@ def fetch_venmo_payments():
     search_term = settings.get('venmo_search_term', 'paid you')
     accounts = load_payment_accounts('venmo')
     users = load_users()
-    payment_count = 0
+    count = 0
     errors = []
     venmo_pattern = re.compile(r"^(.*?) paid you (\$\d+\.\d{2})", re.IGNORECASE)
     for acc in accounts:
@@ -232,6 +234,8 @@ def fetch_all_plex_users():
     save_users(users)
     return count
 
+# --- RESTORED FUNCTIONS (FIXES IMPORT ERROR) ---
+
 def test_plex_connection(token, url="https://plex.tv/api/users"):
     try:
         headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
@@ -246,3 +250,21 @@ def test_email_connection(host, port, email_user, email_pass):
         mail.logout()
         return {"status": "success", "message": "Connection Successful"}
     except Exception as e: return {"status": "error", "message": str(e)}
+
+def get_plex_libraries(token, manual_url=None):
+    headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
+    def parse_libraries(response, server_name="Unknown"):
+        libraries = []
+        try:
+            data = response.json()
+            for d in data.get('MediaContainer', {}).get('Directory', []):
+                libraries.append({ "id": d.get('key'), "title": d.get('title'), "type": d.get('type') })
+            return {"status": "success", "libraries": libraries, "server_name": server_name}
+        except: return {"error": "Parsing Failed"}
+
+    if manual_url:
+        try:
+            res = requests.get(f"{manual_url}/library/sections", headers=headers, timeout=5, verify=False)
+            if res.status_code == 200: return parse_libraries(res, "Manual Server")
+        except: pass
+    return {"error": "Connection Failed"}

@@ -6,7 +6,6 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from automation import check_automation
 
 # --- 1. PATH CONFIGURATION ---
-# Robustly find the frontend build folder
 current_dir = os.getcwd()
 possible_paths = [
     os.path.join(current_dir, '..', 'frontend', 'build'),
@@ -26,9 +25,9 @@ app = Flask(__name__, static_folder=FRONTEND_FOLDER)
 CORS(app)
 
 # --- 2. SCHEDULER (Automation) ---
-# Runs the check every day at 9:00 AM
 try:
     scheduler = BackgroundScheduler()
+    # Run automation check daily at 9am
     scheduler.add_job(func=check_automation, trigger="cron", hour=9)
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
@@ -53,19 +52,20 @@ app.register_blueprint(expenses_bp)
 app.register_blueprint(upcoming_bp)
 
 # --- 4. CATCH-ALL ROUTE (CRITICAL FIX) ---
-# This handles refreshes on pages like /settings or /users
+# This ensures that refreshing page urls like /users or /settings 
+# serves the React app instead of crashing.
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
-    # API calls should return JSON or 404
+    # API calls should return 404 if not found
     if path.startswith('api/'):
         return jsonify(error="API endpoint not found"), 404
 
-    # Serve static files (like logo.png, manifest.json) if they exist
+    # Serve static files if they exist
     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
     
-    # Otherwise, serve the React App (index.html)
+    # Otherwise, serve React index.html
     return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
