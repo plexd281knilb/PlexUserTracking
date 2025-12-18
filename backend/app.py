@@ -35,6 +35,7 @@ except Exception as e:
     print(f"Scheduler failed to start: {e}")
 
 # --- 3. REGISTER BLUEPRINTS ---
+# Ensure all these files exist in backend/routes/
 from routes.users import users_bp
 from routes.settings import settings_bp
 from routes.dashboard import dashboard_bp
@@ -51,21 +52,16 @@ app.register_blueprint(logs_bp)
 app.register_blueprint(expenses_bp)
 app.register_blueprint(upcoming_bp)
 
-# --- 4. CATCH-ALL ROUTE (CRITICAL FIX) ---
-# This ensures that refreshing page urls like /users or /settings 
-# serves the React app instead of crashing.
+# --- 4. CATCH-ALL ROUTE ---
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
-    # API calls should return 404 if not found
     if path.startswith('api/'):
         return jsonify(error="API endpoint not found"), 404
 
-    # Serve static files if they exist
     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
     
-    # Otherwise, serve React index.html
     return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':

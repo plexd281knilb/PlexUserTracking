@@ -8,8 +8,8 @@ from datetime import datetime
 from email.header import decode_header
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-# FIXED IMPORT: Matches database.py exactly
-from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, save_payment_log, load_settings, save_data, load_payment_logs
+# FIXED IMPORT: Removed 'save_payment_log' to be safe
+from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, load_settings, save_data, load_payment_logs
 
 # --- HELPER FUNCTIONS ---
 def get_email_body(msg):
@@ -61,14 +61,15 @@ def send_notification_email(to_email, subject, body):
     except:
         return False
 
-# --- SYNC PLEX USERS (STRICT SYNC) ---
+# --- SYNC PLEX USERS ---
 def fetch_all_plex_users():
     servers = load_servers()['plex']
     current_db_users = load_users()
     
     active_plex_friends = {} 
-    
-    # 1. Gather all current friends from all servers
+    successful_connections = 0
+
+    # 1. Fetch live friend list
     for server in servers:
         token = server.get('token')
         if not token: continue
@@ -76,24 +77,26 @@ def fetch_all_plex_users():
             headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
             r = requests.get('https://plex.tv/api/users', headers=headers, timeout=10)
             if r.status_code == 200:
+                successful_connections += 1
                 root = ET.fromstring(r.content)
                 for u in root.findall('User'):
                     email = u.get('email', '').lower().strip()
                     username = u.get('username', '').strip()
-                    # Store by email if available, otherwise by username
                     key = email if email else username.lower()
                     if key:
                         active_plex_friends[key] = { "username": username, "email": email }
         except: pass
 
-    # 2. Rebuild User List (Strict Removal)
+    if successful_connections == 0 and len(servers) > 0:
+        return {"added": 0, "removed": 0, "status": "Error: Could not connect to Plex"}
+
+    # 2. Rebuild User List
     final_users_list = []
     processed_keys = set()
-    
     added_count = 0
     removed_count = 0
     
-    # A. Iterate DB users - Keep ONLY if they exist in active_plex_friends
+    # Check existing
     for db_user in current_db_users:
         u_email = db_user.get('email', '').lower().strip()
         u_name = db_user.get('username', '').lower().strip()
@@ -103,22 +106,18 @@ def fetch_all_plex_users():
         elif u_name and u_name in active_plex_friends: found_key = u_name
             
         if found_key:
-            # User exists in Plex -> Keep and Update
             data = active_plex_friends[found_key]
             if data['username']: db_user['username'] = data['username']
             if data['email']: db_user['email'] = data['email']
             final_users_list.append(db_user)
             processed_keys.add(found_key)
         else:
-            # User NOT in Plex -> Remove
             removed_count += 1
             
-    # B. Add new users found in Plex
+    # Add new
     max_id = max([u.get('id', 0) for u in final_users_list] + [0])
-    
     for key, p_data in active_plex_friends.items():
         if key not in processed_keys:
-            # Double check for duplicates
             is_dup = any(u for u in final_users_list if u['email'] == p_data['email'] or u['username'] == p_data['username'])
             if not is_dup:
                 max_id += 1
