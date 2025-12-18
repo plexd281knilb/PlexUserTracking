@@ -7,9 +7,7 @@ const Users = () => {
     const [settings, setSettings] = useState({});
     const [loading, setLoading] = useState(true);
     
-    // Sort Configuration
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
-    
     const [selectedIds, setSelectedIds] = useState([]);
     const [editUser, setEditUser] = useState(null);
     const [matchUser, setMatchUser] = useState(null);
@@ -31,62 +29,19 @@ const Users = () => {
 
     useEffect(() => { fetchData(); }, []);
 
-    // --- SORTING LOGIC ---
-    const sortedUsers = useMemo(() => {
-        let sortableUsers = [...users];
-        if (sortConfig.key !== null) {
-            sortableUsers.sort((a, b) => {
-                let valA = a[sortConfig.key];
-                let valB = b[sortConfig.key];
-
-                // Handle 'last_paid' specifically to sort 'Never' correctly
-                if (sortConfig.key === 'last_paid') {
-                    if (valA === 'Never' || !valA) valA = '0000-00-00';
-                    if (valB === 'Never' || !valB) valB = '0000-00-00';
-                }
-
-                // Null safety
-                if (valA === null || valA === undefined) valA = '';
-                if (valB === null || valB === undefined) valB = '';
-
-                // Case-insensitive string sorting
-                if (typeof valA === 'string') valA = valA.toLowerCase();
-                if (typeof valB === 'string') valB = valB.toLowerCase();
-
-                if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-                if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-                return 0;
-            });
-        }
-        return sortableUsers;
-    }, [users, sortConfig]);
-
-    const requestSort = (key) => {
-        let direction = 'asc';
-        if (sortConfig.key === key && sortConfig.direction === 'asc') {
-            direction = 'desc';
-        }
-        setSortConfig({ key, direction });
-    };
-
-    const getSortIcon = (key) => {
-        if (sortConfig.key !== key) return <span style={{opacity:0.3, fontSize:'0.8em', marginLeft:'5px'}}>↕</span>;
-        return <span style={{fontSize:'0.8em', marginLeft:'5px'}}>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
-    };
-
-    // --- HELPER: Calculate Paid Through Date ---
-    const calculatePaidThrough = (user) => {
-        if (user.payment_freq === 'Exempt') return <span style={{color:'#10b981', fontWeight:'bold'}}>Forever</span>;
+    // --- HELPER: Get Date Object for Sorting ---
+    const getPaidDate = (user) => {
+        if (user.payment_freq === 'Exempt') return new Date(9999, 11, 31); // Sorts as far future
         
         if ((!user.last_paid || user.last_paid === 'Never')) {
             if (user.status === 'Active' || user.status === 'Pending') {
-                return <span style={{color:'#f59e0b'}}>2025-12-31 (Default)</span>;
+                return new Date(2025, 11, 31); // Default date
             }
-            return <span style={{color:'#94a3b8'}}>-</span>;
+            return new Date(0); // 1970 (Sorts as expired/none)
         }
 
         const paidDate = new Date(user.last_paid);
-        if (isNaN(paidDate.getTime())) return <span style={{color:'#94a3b8'}}>Invalid Date</span>;
+        if (isNaN(paidDate.getTime())) return new Date(0);
 
         const amountPaid = parseFloat((user.last_payment_amount || '0').replace(/[^0-9.]/g, ''));
         const monthlyFee = parseFloat(settings.fee_monthly || 0);
@@ -113,11 +68,76 @@ const Users = () => {
             }
         }
 
-        if (!isValid) return <span style={{color:'#f59e0b', fontSize:'0.8em'}}>Partial Payment</span>;
+        return isValid ? endDate : new Date(0);
+    };
+
+    // --- HELPER: Render Date Badge ---
+    const renderPaidThrough = (user) => {
+        const date = getPaidDate(user);
+        const year = date.getFullYear();
+
+        if (year === 9999) return <span style={{color:'#10b981', fontWeight:'bold'}}>Forever</span>;
+        if (year === 1970 || year === 1969) {
+             if (!user.last_paid && (user.status === 'Active' || user.status === 'Pending')) return <span style={{color:'#f59e0b'}}>2025-12-31 (Default)</span>; // Should be caught by getPaidDate logic above but distinct for display
+             return <span style={{color:'#94a3b8'}}>-</span>;
+        }
+        
+        // Check Partial logic from before (if amount < fee)
+        const amountPaid = parseFloat((user.last_payment_amount || '0').replace(/[^0-9.]/g, ''));
+        const fee = user.payment_freq === 'Yearly' ? parseFloat(settings.fee_yearly || 0) : parseFloat(settings.fee_monthly || 0);
+        if (user.payment_freq !== 'Exempt' && amountPaid < fee && amountPaid > 0) {
+             return <span style={{color:'#f59e0b', fontSize:'0.8em'}}>Partial Payment</span>;
+        }
 
         const today = new Date();
-        const isExpired = endDate < today;
-        return <span style={{color: isExpired ? '#ef4444' : '#10b981', fontWeight:'bold'}}>{endDate.toISOString().split('T')[0]}</span>;
+        const isExpired = date < today;
+        return <span style={{color: isExpired ? '#ef4444' : '#10b981', fontWeight:'bold'}}>{date.toISOString().split('T')[0]}</span>;
+    };
+
+    // --- SORTING LOGIC ---
+    const sortedUsers = useMemo(() => {
+        let sortableUsers = [...users];
+        if (sortConfig.key !== null) {
+            sortableUsers.sort((a, b) => {
+                let valA, valB;
+
+                if (sortConfig.key === 'paid_thru') {
+                    valA = getPaidDate(a);
+                    valB = getPaidDate(b);
+                } else {
+                    valA = a[sortConfig.key];
+                    valB = b[sortConfig.key];
+                    
+                    // Handle 'last_paid' string sorting
+                    if (sortConfig.key === 'last_paid') {
+                        if (valA === 'Never' || !valA) valA = '0000-00-00';
+                        if (valB === 'Never' || !valB) valB = '0000-00-00';
+                    }
+                    if (valA === null || valA === undefined) valA = '';
+                    if (valB === null || valB === undefined) valB = '';
+                    if (typeof valA === 'string') valA = valA.toLowerCase();
+                    if (typeof valB === 'string') valB = valB.toLowerCase();
+                }
+
+                if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return sortableUsers;
+    }, [users, sortConfig, settings]); // Added settings dependency
+
+    const requestSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const getSortIcon = (key) => {
+        if (sortConfig.key !== key) return <span style={{opacity:0.3, fontSize:'0.8em', marginLeft:'5px'}}>↕</span>;
+        return <span style={{fontSize:'0.8em', marginLeft:'5px'}}>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
     };
 
     // --- HANDLERS ---
@@ -211,8 +231,16 @@ const Users = () => {
                         <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#eab308', color: 'black'}} onClick={() => handleBulkUpdate({payment_freq: 'Exempt'})}>Set Exempt</button>
                         <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#64748b'}} onClick={() => handleBulkUpdate({payment_freq: 'Monthly'})}>Set Monthly</button>
                         <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#8b5cf6'}} onClick={() => handleBulkUpdate({payment_freq: 'Yearly'})}>Set Yearly</button>
-                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#ef4444'}} onClick={() => handleBulkUpdate({status: 'Disabled'})}>Disable All</button>
-                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#b91c1c'}} onClick={handleBulkDelete}>Delete Selected</button>
+                        
+                        <div style={{width:'1px', height:'20px', backgroundColor:'rgba(255,255,255,0.2)', margin:'0 5px'}}></div>
+                        
+                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#10b981'}} onClick={() => handleBulkUpdate({status: 'Active'})}>Set Active</button>
+                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#f59e0b', color:'black'}} onClick={() => handleBulkUpdate({status: 'Pending'})}>Set Pending</button>
+                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#ef4444'}} onClick={() => handleBulkUpdate({status: 'Disabled'})}>Set Disabled</button>
+                        
+                        <div style={{width:'1px', height:'20px', backgroundColor:'rgba(255,255,255,0.2)', margin:'0 5px'}}></div>
+
+                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#b91c1c'}} onClick={handleBulkDelete}>Delete</button>
                     </div>
                 </div>
             )}
@@ -228,7 +256,7 @@ const Users = () => {
                             <th onClick={() => requestSort('payment_freq')} style={{cursor:'pointer', userSelect:'none'}}>Frequency {getSortIcon('payment_freq')}</th>
                             <th onClick={() => requestSort('status')} style={{cursor:'pointer', userSelect:'none'}}>Status {getSortIcon('status')}</th>
                             <th onClick={() => requestSort('last_paid')} style={{cursor:'pointer', userSelect:'none'}}>Last Paid {getSortIcon('last_paid')}</th>
-                            <th>Paid Thru</th>
+                            <th onClick={() => requestSort('paid_thru')} style={{cursor:'pointer', userSelect:'none'}}>Paid Thru {getSortIcon('paid_thru')}</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -242,7 +270,7 @@ const Users = () => {
                                 <td><span style={{fontSize:'0.75rem', padding:'2px 6px', borderRadius:'4px', backgroundColor: getFreqBadgeColor(u.payment_freq), color: u.payment_freq === 'Exempt' ? 'black' : 'white', fontWeight: 'bold'}}>{u.payment_freq || 'Exempt'}</span></td>
                                 <td><span style={{color: u.status === 'Active' ? '#10b981' : '#ef4444', fontWeight: 'bold'}}>{u.status}</span></td>
                                 <td>{u.last_paid || 'Never'}{u.last_payment_amount && <span style={{marginLeft: '8px', fontSize: '0.75rem', color: '#10b981', padding: '2px 5px'}}>({u.last_payment_amount})</span>}</td>
-                                <td>{calculatePaidThrough(u)}</td>
+                                <td>{renderPaidThrough(u)}</td>
                                 <td>
                                     <div className="flex" style={{gap:'5px'}}>
                                         <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem'}} onClick={() => setEditUser(u)}>Edit</button>
