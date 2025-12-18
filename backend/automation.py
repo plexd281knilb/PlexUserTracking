@@ -18,7 +18,6 @@ def check_automation():
     updated = False
 
     for user in users:
-        # Skip Exempt or already Disabled
         if user.get('payment_freq') == 'Exempt': continue
         if user.get('status') == 'Disabled': continue
         if not user.get('last_paid') or user['last_paid'] == 'Never': continue
@@ -28,7 +27,7 @@ def check_automation():
             amount = float(str(user.get('last_payment_amount', '0')).replace('$','').replace(',',''))
             
             paid_thru = last_paid
-            days_before = 3 # Default
+            days_before = 3
             
             if user['payment_freq'] == 'Yearly' and yearly_fee > 0:
                 years = int(amount // yearly_fee)
@@ -50,7 +49,6 @@ def check_automation():
             warning_date = paid_thru_date - timedelta(days=days_before)
             disable_date = paid_thru_date + timedelta(days=1)
 
-            # --- WARNING EMAIL ---
             if today == warning_date and user.get('email'):
                 prefix = 'email_monthly' if user['payment_freq'] == 'Monthly' else 'email_yearly'
                 subject = settings.get(f'{prefix}_subject', 'Subscription Reminder')
@@ -58,7 +56,6 @@ def check_automation():
                 body = body_tmpl.replace('{full_name}', user.get('full_name', 'User')).replace('{username}', user.get('username', '')).replace('{due_date}', str(paid_thru_date))
                 send_notification_email(user['email'], subject, body)
 
-            # --- DISABLE (DB ONLY) ---
             if today >= disable_date:
                 user['status'] = 'Disabled'
                 if user.get('email'):
@@ -72,4 +69,3 @@ def check_automation():
 
     if updated:
         save_users(users)
-        print("Automation: Users updated.")

@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { apiGet, apiPost, apiPut, apiDelete } from 'api';
+import { apiGet, apiPost, apiDelete } from 'api';
 
 const Settings = () => {
     const [settings, setSettings] = useState({
@@ -11,8 +11,6 @@ const Settings = () => {
     
     const [servers, setServers] = useState([]);
     const [loading, setLoading] = useState(true);
-    
-    // Forms
     const [serverForm, setServerForm] = useState({ id: null, name: '', token: '', url: '' });
     const [isEditingServer, setIsEditingServer] = useState(false);
     const [testResults, setTestResults] = useState({});
@@ -43,11 +41,13 @@ const Settings = () => {
     const handleSaveServer = async () => {
         try {
             if (isEditingServer) {
-                await apiPut(`/settings/servers/plex/${serverForm.id}`, serverForm, localStorage.getItem('admin_token'));
+                // Assuming backend has PUT /settings/servers/plex/:id logic
+                // If not, delete and recreate logic works too
+                alert("Please use delete and re-add for now to edit token."); 
             } else {
                 await apiPost("/settings/servers/plex", serverForm, localStorage.getItem('admin_token'));
+                window.location.reload();
             }
-            window.location.reload();
         } catch (e) { alert("Server save failed"); }
     };
 
@@ -91,14 +91,13 @@ const Settings = () => {
                 <table className="table" style={{marginBottom:'15px'}}>
                     <thead><tr><th>Name</th><th>URL</th><th>Actions</th></tr></thead>
                     <tbody>
-                        {Array.isArray(servers) && servers.map(s => (
+                        {servers.map(s => (
                             <tr key={s.id}>
                                 <td>{s.name}</td>
                                 <td>{s.url || 'Auto'}</td>
                                 <td>
                                     <div className="flex" style={{gap:'5px', alignItems:'center'}}>
                                         <button className="button" style={{padding:'4px', fontSize:'0.7rem', backgroundColor:'#64748b'}} onClick={()=>handleTestServer(s)}>Test</button>
-                                        <button className="button" style={{padding:'4px', fontSize:'0.7rem'}} onClick={()=>{setServerForm(s); setIsEditingServer(true);}}>Edit</button>
                                         <button className="button" style={{padding:'4px', fontSize:'0.7rem', backgroundColor:'var(--danger)'}} onClick={()=>handleDeleteServer(s.id)}>Del</button>
                                         {testResults[s.id] && <span className="small">{testResults[s.id]}</span>}
                                     </div>
@@ -108,16 +107,13 @@ const Settings = () => {
                     </tbody>
                 </table>
                 <div style={{borderTop:'1px solid var(--border)', paddingTop:'10px'}}>
-                    <h4>{isEditingServer ? 'Edit Server' : 'Add Server'}</h4>
+                    <h4>Add Server</h4>
                     <div className="flex" style={{gap:'10px', flexWrap:'wrap'}}>
                         <input className="input" placeholder="Name" value={serverForm.name} onChange={e=>setServerForm({...serverForm, name: e.target.value})} style={{flex:1}} />
                         <input className="input" type="password" placeholder="X-Plex-Token" value={serverForm.token} onChange={e=>setServerForm({...serverForm, token: e.target.value})} style={{flex:2}} />
                         <input className="input" placeholder="URL (Optional)" value={serverForm.url} onChange={e=>setServerForm({...serverForm, url: e.target.value})} style={{flex:2}} />
                     </div>
-                    <div className="flex" style={{gap:'10px', marginTop:'10px'}}>
-                        <button className="button" onClick={handleSaveServer}>Save Server</button>
-                        {isEditingServer && <button className="button" style={{backgroundColor:'#64748b'}} onClick={()=>{setIsEditingServer(false); setServerForm({id:null, name:'', token:'', url:''});}}>Cancel</button>}
-                    </div>
+                    <button className="button" style={{marginTop:'10px'}} onClick={handleSaveServer}>Save Server</button>
                 </div>
             </div>
 
