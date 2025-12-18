@@ -70,7 +70,11 @@ def unmap_payment():
     save_data('payment_logs', logs)
     return jsonify({'message': 'Payment unmapped'})
 
+# This calls the improved Sync logic (Two-way sync)
 @users_bp.route('/import/plex', methods=['POST'])
 def import_plex():
     stats = fetch_all_plex_users()
+    if "status" in stats and stats["status"].startswith("Error"):
+        return jsonify({'message': stats["status"]}), 500
+        
     return jsonify({'message': f"Sync Complete: +{stats['added']} Added, -{stats['removed']} Removed"})

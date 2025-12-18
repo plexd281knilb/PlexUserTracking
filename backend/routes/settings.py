@@ -26,6 +26,8 @@ def get_servers():
 def add_plex_server():
     data = request.json
     servers = load_servers()
+    if 'plex' not in servers: servers['plex'] = []
+    
     new_server = {
         "id": max([s.get('id', 0) for s in servers['plex']] + [0]) + 1,
         "name": data.get('name'),
@@ -40,7 +42,7 @@ def add_plex_server():
 def update_plex_server(server_id):
     data = request.json
     servers = load_servers()
-    for s in servers['plex']:
+    for s in servers.get('plex', []):
         if s['id'] == server_id:
             s.update(data)
             save_data('servers', servers)
@@ -50,11 +52,12 @@ def update_plex_server(server_id):
 @settings_bp.route('/servers/plex/<int:server_id>', methods=['DELETE'])
 def delete_plex_server(server_id):
     servers = load_servers()
-    servers['plex'] = [s for s in servers['plex'] if s['id'] != server_id]
-    save_data('servers', servers)
+    if 'plex' in servers:
+        servers['plex'] = [s for s in servers['plex'] if s['id'] != server_id]
+        save_data('servers', servers)
     return jsonify({'message': 'Server removed'})
 
-# --- PAYMENT SCANNERS ---
+# --- PAYMENT ACCOUNTS (Settings Page) ---
 @settings_bp.route('/payment_accounts', methods=['GET'])
 def get_payment_accounts():
     return jsonify(load_data('payment_accounts', []))
