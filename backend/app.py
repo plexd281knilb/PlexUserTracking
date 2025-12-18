@@ -35,7 +35,7 @@ except Exception as e:
     print(f"Scheduler failed to start: {e}")
 
 # --- 3. REGISTER BLUEPRINTS ---
-# Ensure all these files exist in backend/routes/
+# Ensure these files exist in backend/routes/
 from routes.users import users_bp
 from routes.settings import settings_bp
 from routes.dashboard import dashboard_bp

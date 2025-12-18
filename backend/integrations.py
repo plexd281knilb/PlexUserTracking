@@ -8,8 +8,8 @@ from datetime import datetime
 from email.header import decode_header
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-# Matches database.py exactly now
-from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, save_payment_log, load_settings, save_data, load_payment_logs
+# FIXED IMPORT: Removed 'save_payment_log' to prevent ImportErrors
+from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, load_settings, save_data, load_payment_logs
 
 # --- HELPER FUNCTIONS ---
 def get_email_body(msg):
@@ -61,7 +61,7 @@ def send_notification_email(to_email, subject, body):
     except:
         return False
 
-# --- SYNC PLEX USERS (STRICT SYNC) ---
+# --- SYNC PLEX USERS ---
 def fetch_all_plex_users():
     servers = load_servers()['plex']
     current_db_users = load_users()
@@ -69,7 +69,6 @@ def fetch_all_plex_users():
     active_plex_friends = {} 
     successful_connections = 0
 
-    # 1. Fetch live friend list from Plex
     for server in servers:
         token = server.get('token')
         if not token: continue
@@ -82,24 +81,21 @@ def fetch_all_plex_users():
                 for u in root.findall('User'):
                     email = u.get('email', '').lower().strip()
                     username = u.get('username', '').strip()
-                    # Key by email if exists, else username
                     key = email if email else username.lower()
                     if key:
                         active_plex_friends[key] = { "username": username, "email": email }
         except: pass
 
-    # If no successful connections, abort sync to prevent wiping DB
+    # If no successful connections, return error to prevent wiping DB
     if successful_connections == 0 and len(servers) > 0:
-        return {"added": 0, "removed": 0, "status": "Error: Could not connect to any Plex server"}
+        return {"added": 0, "removed": 0, "status": "Error: Could not connect to Plex"}
 
-    # 2. Rebuild User List
     final_users_list = []
     processed_keys = set()
-    
     added_count = 0
     removed_count = 0
     
-    # A. Check existing users - Keep ONLY if found in active_plex_friends
+    # 1. Update Existing
     for db_user in current_db_users:
         u_email = db_user.get('email', '').lower().strip()
         u_name = db_user.get('username', '').lower().strip()
@@ -109,22 +105,19 @@ def fetch_all_plex_users():
         elif u_name and u_name in active_plex_friends: found_key = u_name
             
         if found_key:
-            # Update data and Keep
             data = active_plex_friends[found_key]
             if data['username']: db_user['username'] = data['username']
             if data['email']: db_user['email'] = data['email']
             final_users_list.append(db_user)
             processed_keys.add(found_key)
         else:
-            # User not in Plex -> Remove
             removed_count += 1
             
-    # B. Add NEW users
+    # 2. Add New
     max_id = max([u.get('id', 0) for u in final_users_list] + [0])
-    
     for key, p_data in active_plex_friends.items():
         if key not in processed_keys:
-            # Double check duplicates by alternate key
+            # Double check for duplicates
             is_dup = any(u for u in final_users_list if u['email'] == p_data['email'] or u['username'] == p_data['username'])
             if not is_dup:
                 max_id += 1
@@ -142,7 +135,7 @@ def fetch_all_plex_users():
     save_users(final_users_list)
     return {"added": added_count, "removed": removed_count}
 
-# --- FETCHERS ---
+# --- PAYMENT FETCHERS ---
 def process_payment(users, sender_name, amount_str, date_obj, service_name, existing_logs=None, save_db=True):
     date_str = datetime.now().strftime('%Y-%m-%d')
     try:
