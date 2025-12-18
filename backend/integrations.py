@@ -8,6 +8,7 @@ from datetime import datetime
 from email.header import decode_header
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+# FIXED IMPORT: Matches database.py exactly
 from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, save_payment_log, load_settings, save_data, load_payment_logs
 
 # --- HELPER FUNCTIONS ---
@@ -218,7 +219,6 @@ def fetch_paypal_payments():
     users = load_users()
     count = 0
     errors = []
-    paypal_pattern = re.compile(r"(.*?)\s+sent\s+you\s+(\$\d+\.\d{2})\s+USD", re.IGNORECASE)
     for acc in accounts:
         if not acc.get('enabled', True): continue
         mail = None
@@ -250,7 +250,6 @@ def fetch_zelle_payments():
     users = load_users()
     count = 0
     errors = []
-    zelle_pattern = re.compile(r"received (\$\d+\.\d{2}) from ([A-Za-z ]+)")
     for acc in accounts:
         if not acc.get('enabled', True): continue
         mail = None
@@ -264,11 +263,7 @@ def fetch_zelle_payments():
                 for e_id in messages[0].split()[-50:]:
                     _, msg_data = mail.fetch(e_id, '(RFC822)')
                     msg = email.message_from_bytes(msg_data[0][1])
-                    subject = get_email_subject(msg)
-                    match = zelle_pattern.search(subject)
-                    if match:
-                        if process_payment(users, match.group(2).strip(), match.group(1), msg["Date"], 'Zelle'): 
-                            count += 1
+                    if process_payment(users, get_email_subject(msg), "0", msg["Date"], 'Zelle'): count += 1
             acc['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         except Exception as e: errors.append(str(e))
         finally:
