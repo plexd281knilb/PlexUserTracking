@@ -90,16 +90,29 @@ def fetch_all_plex_users():
                 root = ET.fromstring(r.content)
                 count_for_server = 0
                 for u in root.findall('User'):
-                    email = u.get('email', '').lower().strip()
                     username = u.get('username', '').strip()
+                    email = u.get('email', '').lower().strip()
+                    
+                    # 1. Check for Pending Status
+                    if u.get('state') == 'pending':
+                        print(f"Skipping Pending User: {username or email}")
+                        continue
+
+                    # 2. NEW: Check for Library Access (Must have <Server> tags)
+                    # The XML structure lists shared servers as children of the User element.
+                    # If a user has no Server tags, they have no access to any libraries.
+                    if not u.findall('Server'):
+                        print(f"Skipping User without library access: {username or email}")
+                        continue
+
+                    # We prioritize email as the unique key
                     key = email if email else username.lower()
                     
                     if key:
                         active_plex_friends[key] = { "username": username, "email": email }
                         count_for_server += 1
-                        # DEBUG: Print found users
-                        print(f"DEBUG: Found Plex User: {username} ({email})")
-                print(f"Server {server.get('name')}: Found {count_for_server} friends.")
+                        
+                print(f"Server {server.get('name')}: Found {count_for_server} active friends with access.")
             else:
                 print(f"Server {server.get('name')} failed: {r.status_code}")
         except Exception as e:
@@ -130,7 +143,7 @@ def fetch_all_plex_users():
             final_users_list.append(db_user)
             processed_keys.add(found_key)
         else:
-            print(f"DEBUG: Removing User from DB: {db_user.get('username')} (Not found in Plex)")
+            print(f"Removing User from DB: {db_user.get('username')} (No access or removed)")
             removed_count += 1
             
     # B. Add New
@@ -172,7 +185,6 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
     if existing_logs is None: existing_logs = load_payment_logs()
     
     raw_text = f"{sender_name} sent {amount_str}"
-    # Deduplicate based on raw text and date
     duplicate = next((l for l in existing_logs if l.get('raw_text') == raw_text and l.get('date') == date_str), None)
     if duplicate:
         return False
