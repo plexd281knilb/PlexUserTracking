@@ -4,13 +4,14 @@ from integrations import send_notification_email
 import calendar
 
 def check_automation():
-    print("--- RUNNING EMAIL AUTOMATION ---")
+    print("--- RUNNING AUTOMATION CHECK ---")
     users = load_users()
     settings = load_settings()
     
     monthly_fee = float(settings.get('fee_monthly', 0))
     yearly_fee = float(settings.get('fee_yearly', 0))
     
+    # Get Configured Notify Days (Defaults: 3 days for monthly, 7 for yearly)
     notify_monthly = int(settings.get('notify_days_monthly', 3))
     notify_yearly = int(settings.get('notify_days_yearly', 7))
     
@@ -18,6 +19,7 @@ def check_automation():
     updated = False
 
     for user in users:
+        # Skip Exempt or already Disabled
         if user.get('payment_freq') == 'Exempt': continue
         if user.get('status') == 'Disabled': continue
         if not user.get('last_paid') or user['last_paid'] == 'Never': continue
@@ -27,8 +29,9 @@ def check_automation():
             amount = float(str(user.get('last_payment_amount', '0')).replace('$','').replace(',',''))
             
             paid_thru = last_paid
-            days_before = 3
+            days_before = 3 # Default fallback
             
+            # Yearly Logic
             if user['payment_freq'] == 'Yearly' and yearly_fee > 0:
                 years = int(amount // yearly_fee)
                 if years > 0:
@@ -36,6 +39,7 @@ def check_automation():
                     paid_thru = paid_thru.replace(month=12, day=31)
                 days_before = notify_yearly
                     
+            # Monthly Logic
             elif user['payment_freq'] == 'Monthly' and monthly_fee > 0:
                 months = int(amount // monthly_fee)
                 if months > 0:
@@ -49,9 +53,9 @@ def check_automation():
             warning_date = paid_thru_date - timedelta(days=days_before)
             disable_date = paid_thru_date + timedelta(days=1)
 
-            # --- WARNING EMAIL ---
+            # --- SEND REMINDER ---
             if today == warning_date and user.get('email'):
-                print(f"Sending warning to {user['username']}")
+                print(f"Sending reminder to {user['username']}")
                 prefix = 'email_monthly' if user['payment_freq'] == 'Monthly' else 'email_yearly'
                 subject = settings.get(f'{prefix}_subject', 'Subscription Reminder')
                 body_tmpl = settings.get(f'{prefix}_body', 'Your subscription is due on {due_date}.')
@@ -62,7 +66,7 @@ def check_automation():
                                 
                 send_notification_email(user['email'], subject, body)
 
-            # --- DISABLE (DB ONLY) ---
+            # --- DISABLE & NOTIFY ---
             if today >= disable_date:
                 print(f"Disabling {user['username']} (Expired {paid_thru_date})")
                 user['status'] = 'Disabled'
