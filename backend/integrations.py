@@ -8,8 +8,9 @@ from datetime import datetime
 from email.header import decode_header
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-# FIXED IMPORT: Removed 'save_payment_log' to prevent ImportErrors
-from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, load_settings, save_data, load_payment_logs
+from email.utils import parsedate_to_datetime  # <--- Added for date fixing
+# FIXED IMPORT: Matches database.py exactly
+from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, save_payment_log, load_settings, save_data, load_payment_logs
 
 # --- HELPER FUNCTIONS ---
 def get_email_body(msg):
@@ -86,7 +87,6 @@ def fetch_all_plex_users():
                         active_plex_friends[key] = { "username": username, "email": email }
         except: pass
 
-    # If no successful connections, return error to prevent wiping DB
     if successful_connections == 0 and len(servers) > 0:
         return {"added": 0, "removed": 0, "status": "Error: Could not connect to Plex"}
 
@@ -95,7 +95,6 @@ def fetch_all_plex_users():
     added_count = 0
     removed_count = 0
     
-    # 1. Update Existing
     for db_user in current_db_users:
         u_email = db_user.get('email', '').lower().strip()
         u_name = db_user.get('username', '').lower().strip()
@@ -113,11 +112,9 @@ def fetch_all_plex_users():
         else:
             removed_count += 1
             
-    # 2. Add New
     max_id = max([u.get('id', 0) for u in final_users_list] + [0])
     for key, p_data in active_plex_friends.items():
         if key not in processed_keys:
-            # Double check for duplicates
             is_dup = any(u for u in final_users_list if u['email'] == p_data['email'] or u['username'] == p_data['username'])
             if not is_dup:
                 max_id += 1
@@ -137,11 +134,24 @@ def fetch_all_plex_users():
 
 # --- PAYMENT FETCHERS ---
 def process_payment(users, sender_name, amount_str, date_obj, service_name, existing_logs=None, save_db=True):
+    # Default to current date if all else fails
     date_str = datetime.now().strftime('%Y-%m-%d')
+    
+    # 1. Try to process the incoming date_obj
     try:
-        if isinstance(date_obj, str): date_str = date_obj
-        else: date_str = date_obj.strftime('%Y-%m-%d')
-    except: pass 
+        if isinstance(date_obj, str):
+            # Check if it looks like an email header date (e.g., "Tue, 25 Nov 2025...")
+            # If so, clean it up. If it's already YYYY-MM-DD, keep it.
+            try:
+                dt = parsedate_to_datetime(date_obj)
+                date_str = dt.strftime('%Y-%m-%d')
+            except:
+                # If parsing fails, stick with the original string (better than nothing)
+                date_str = date_obj
+        elif isinstance(date_obj, datetime):
+            date_str = date_obj.strftime('%Y-%m-%d')
+    except: 
+        pass 
 
     if existing_logs is None: existing_logs = load_payment_logs()
     
