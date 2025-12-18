@@ -9,10 +9,12 @@ def calculate_expiry(user, settings):
     Returns the expiration date (datetime object) or None if exempt/invalid.
     """
     if user.get('payment_freq') == 'Exempt': return None
+    
+    # --- FIX: Handle Default Date for New/Pending Users ---
     if not user.get('last_paid') or user['last_paid'] == 'Never': 
-        # If active/pending but never paid, treat as expiring Dec 31, 2025 (Default)
-        # or handle as 'immediate' depending on your preference.
-        # For now, we return None to skip automation for completely new users until manual link.
+        if user.get('status') in ['Active', 'Pending']:
+            # Default to Dec 31, 2025 as requested
+            return datetime(2025, 12, 31)
         return None
 
     try:
@@ -29,7 +31,7 @@ def calculate_expiry(user, settings):
             years = int(amount // yearly_fee)
             if years > 0:
                 paid_thru = paid_thru.replace(year=paid_thru.year + years)
-                # Set to end of that year
+                # Set to end of that year (Dec 31)
                 paid_thru = paid_thru.replace(month=12, day=31)
         
         elif user['payment_freq'] == 'Monthly' and monthly_fee > 0:
