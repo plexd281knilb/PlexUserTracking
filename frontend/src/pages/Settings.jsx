@@ -3,13 +3,9 @@ import { apiGet, apiPost, apiPut, apiDelete } from 'api';
 
 const Settings = () => {
     const [settings, setSettings] = useState({
-        // Financials
         fee_monthly: "0.00", fee_yearly: "0.00", scan_interval_min: 60,
-        // Automation Timing
         notify_days_monthly: 3, notify_days_yearly: 7,
-        // Search Terms
         venmo_search_term: 'paid you', paypal_search_term: 'sent you', zelle_search_term: 'received',
-        // SMTP
         smtp_host: "", smtp_port: 465, smtp_user: "", smtp_pass: ""
     });
     
@@ -22,7 +18,6 @@ const Settings = () => {
     
     const [isEditingServer, setIsEditingServer] = useState(false);
     const [isEditingScanner, setIsEditingScanner] = useState(false);
-    
     const [testResults, setTestResults] = useState({});
 
     useEffect(() => {
@@ -34,10 +29,9 @@ const Settings = () => {
                     apiGet('/settings/payment_accounts')
                 ]);
                 setSettings(prev => ({ ...prev, ...sets }));
-                
-                const plexServers = (srvs.plex || []).filter(s => s.name && s.name.trim() !== "");
-                setServers(plexServers);
-                setScanners(scans || []);
+                setServers((srvs.plex || []).filter(s => s.name));
+                // Safety check to ensure scans is an array
+                setScanners(Array.isArray(scans) ? scans : []);
             } catch (e) { console.error(e); }
             setLoading(false);
         };
@@ -116,7 +110,6 @@ const Settings = () => {
                     <div style={{flex:1}}><label className="small">Monthly Fee ($)</label><input className="input" value={settings.fee_monthly} onChange={e=>setSettings({...settings, fee_monthly: e.target.value})} placeholder="0.00" /></div>
                     <div style={{flex:1}}><label className="small">Yearly Fee ($)</label><input className="input" value={settings.fee_yearly} onChange={e=>setSettings({...settings, fee_yearly: e.target.value})} placeholder="0.00" /></div>
                 </div>
-                <hr style={{borderColor:'var(--border)', margin:'15px 0'}}/>
                 <div className="flex" style={{gap:'20px'}}>
                     <div style={{flex:1}}><label className="small">Monthly Reminder (Days Before)</label><input className="input" type="number" value={settings.notify_days_monthly} onChange={e=>setSettings({...settings, notify_days_monthly: parseInt(e.target.value)})} /></div>
                     <div style={{flex:1}}><label className="small">Yearly Reminder (Days Before)</label><input className="input" type="number" value={settings.notify_days_yearly} onChange={e=>setSettings({...settings, notify_days_yearly: parseInt(e.target.value)})} /></div>
@@ -127,11 +120,10 @@ const Settings = () => {
             {/* 2. PAYMENT SCANNERS */}
             <div className="card" style={{marginBottom:'20px'}}>
                 <h3>Payment Scanners (IMAP)</h3>
-                <p className="small" style={{color:'var(--text-muted)'}}>Connect email accounts to scan for Venmo, Zelle, and PayPal receipts.</p>
                 <table className="table" style={{marginBottom:'15px'}}>
                     <thead><tr><th>Type</th><th>Email</th><th>Server</th><th>Actions</th></tr></thead>
                     <tbody>
-                        {scanners.map(s => (
+                        {Array.isArray(scanners) && scanners.map(s => (
                             <tr key={s.id}>
                                 <td><span style={{fontWeight:'bold'}}>{s.type}</span></td>
                                 <td>{s.email}</td>
@@ -161,7 +153,7 @@ const Settings = () => {
                         <input className="input" type="password" placeholder="App Password" value={scannerForm.password} onChange={e=>setScannerForm({...scannerForm, password: e.target.value})} style={{flex:2}} />
                     </div>
                     <div className="flex" style={{gap:'10px', flexWrap:'wrap'}}>
-                        <input className="input" placeholder="IMAP Server (e.g., imap.gmail.com)" value={scannerForm.imap_server} onChange={e=>setScannerForm({...scannerForm, imap_server: e.target.value})} style={{flex:2}} />
+                        <input className="input" placeholder="IMAP Server" value={scannerForm.imap_server} onChange={e=>setScannerForm({...scannerForm, imap_server: e.target.value})} style={{flex:2}} />
                         <input className="input" placeholder="Port" type="number" value={scannerForm.port} onChange={e=>setScannerForm({...scannerForm, port: parseInt(e.target.value)})} style={{flex:1}} />
                         <label style={{display:'flex', alignItems:'center', gap:'5px', flex:1, cursor:'pointer'}}>
                             <input type="checkbox" checked={scannerForm.enabled} onChange={e=>setScannerForm({...scannerForm, enabled: e.target.checked})} /> Enable
@@ -176,11 +168,11 @@ const Settings = () => {
 
             {/* 3. PLEX SERVERS */}
             <div className="card" style={{marginBottom:'20px'}}>
-                <h3>Plex Servers (For Import Only)</h3>
+                <h3>Plex Servers (For Sync)</h3>
                 <table className="table" style={{marginBottom:'15px'}}>
                     <thead><tr><th>Name</th><th>URL</th><th>Actions</th></tr></thead>
                     <tbody>
-                        {servers.map(s => (
+                        {Array.isArray(servers) && servers.map(s => (
                             <tr key={s.id}>
                                 <td>{s.name}</td>
                                 <td>{s.url || 'Auto'}</td>
@@ -196,7 +188,6 @@ const Settings = () => {
                         ))}
                     </tbody>
                 </table>
-                
                 <div style={{borderTop:'1px solid var(--border)', paddingTop:'10px'}}>
                     <h4>{isEditingServer ? 'Edit Server' : 'Add Server'}</h4>
                     <div className="flex" style={{gap:'10px', flexWrap:'wrap'}}>
@@ -214,7 +205,6 @@ const Settings = () => {
             {/* 4. NOTIFICATIONS */}
             <div className="card" style={{marginBottom:'20px'}}>
                 <h3>Notifications (SMTP)</h3>
-                <p className="small" style={{color:'var(--text-muted)'}}>Required for automated email reminders.</p>
                 <div className="flex" style={{gap:'10px', marginBottom:'10px'}}>
                     <div style={{flex:2}}><label className="small">Host</label><input className="input" placeholder="smtp.gmail.com" value={settings.smtp_host} onChange={e=>setSettings({...settings, smtp_host: e.target.value})} /></div>
                     <div style={{flex:1}}><label className="small">Port</label><input className="input" value={settings.smtp_port} onChange={e=>setSettings({...settings, smtp_port: e.target.value})} /></div>

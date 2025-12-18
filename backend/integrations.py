@@ -8,7 +8,7 @@ from datetime import datetime
 from email.header import decode_header
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-# FIXED IMPORT: Matches database.py exactly
+# Matches database.py exactly now
 from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, save_payment_log, load_settings, save_data, load_payment_logs
 
 # --- HELPER FUNCTIONS ---
@@ -66,11 +66,10 @@ def fetch_all_plex_users():
     servers = load_servers()['plex']
     current_db_users = load_users()
     
-    # 1. Build a map of ALL current Plex friends
-    # Key = Email (or Username if email missing)
-    # Value = User Data
     active_plex_friends = {} 
-    
+    successful_connections = 0
+
+    # 1. Fetch live friend list from Plex
     for server in servers:
         token = server.get('token')
         if not token: continue
@@ -78,20 +77,20 @@ def fetch_all_plex_users():
             headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
             r = requests.get('https://plex.tv/api/users', headers=headers, timeout=10)
             if r.status_code == 200:
+                successful_connections += 1
                 root = ET.fromstring(r.content)
                 for u in root.findall('User'):
                     email = u.get('email', '').lower().strip()
                     username = u.get('username', '').strip()
-                    
-                    # Store by email if available, otherwise username
+                    # Key by email if exists, else username
                     key = email if email else username.lower()
-                    
                     if key:
-                        active_plex_friends[key] = { 
-                            "username": username, 
-                            "email": email 
-                        }
+                        active_plex_friends[key] = { "username": username, "email": email }
         except: pass
+
+    # SAFETY CHECK: If no successful connections, abort sync to prevent wiping DB
+    if successful_connections == 0 and len(servers) > 0:
+        return {"added": 0, "removed": 0, "status": "Error: Could not connect to any Plex server"}
 
     # 2. Rebuild User List
     final_users_list = []
@@ -100,42 +99,34 @@ def fetch_all_plex_users():
     added_count = 0
     removed_count = 0
     
-    # A. Check existing DB users against Plex List
+    # A. Check existing users - Keep ONLY if found in active_plex_friends
     for db_user in current_db_users:
         u_email = db_user.get('email', '').lower().strip()
         u_name = db_user.get('username', '').lower().strip()
         
-        # Check by email OR username
-        found_in_plex = False
-        if u_email and u_email in active_plex_friends:
-            found_in_plex = True
-            processed_keys.add(u_email)
-        elif u_name and u_name in active_plex_friends:
-            found_in_plex = True
-            processed_keys.add(u_name)
+        found_key = None
+        if u_email and u_email in active_plex_friends: found_key = u_email
+        elif u_name and u_name in active_plex_friends: found_key = u_name
             
-        if found_in_plex:
-            # Keep User
+        if found_key:
+            # Update data and Keep
+            data = active_plex_friends[found_key]
+            if data['username']: db_user['username'] = data['username']
+            if data['email']: db_user['email'] = data['email']
             final_users_list.append(db_user)
+            processed_keys.add(found_key)
         else:
-            # Drop User
+            # User not in Plex -> Remove
             removed_count += 1
             
-    # B. Add NEW users from Plex
+    # B. Add NEW users
     max_id = max([u.get('id', 0) for u in final_users_list] + [0])
     
     for key, p_data in active_plex_friends.items():
         if key not in processed_keys:
-            # Ensure we haven't added this person by their other identifier
-            # (e.g. matched by email already, don't match by username now)
-            is_duplicate = False
-            for existing in final_users_list:
-                if (p_data['email'] and existing['email'] == p_data['email']) or \
-                   (p_data['username'] and existing['username'] == p_data['username']):
-                    is_duplicate = True
-                    break
-            
-            if not is_duplicate:
+            # Double check duplicates by alternate key
+            is_dup = any(u for u in final_users_list if u['email'] == p_data['email'] or u['username'] == p_data['username'])
+            if not is_dup:
                 max_id += 1
                 final_users_list.append({
                     "id": max_id,
@@ -196,6 +187,7 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
 
 def fetch_venmo_payments():
     settings = load_settings()
+    search_term = settings.get('venmo_search_term', 'paid you')
     accounts = load_payment_accounts('Venmo')
     users = load_users()
     count = 0
@@ -208,7 +200,7 @@ def fetch_venmo_payments():
             mail = imaplib.IMAP4_SSL(acc['imap_server'], acc['port'])
             mail.login(acc['email'], acc['password'])
             mail.select('inbox')
-            criteria = f'(SUBJECT "{settings.get("venmo_search_term", "paid you")}")'
+            criteria = f'(SUBJECT "{search_term}")'
             if "venmo.com" in acc['email']: criteria = f'(FROM "venmo@venmo.com" {criteria})'
             status, messages = mail.search(None, criteria)
             if status == 'OK':
@@ -228,6 +220,7 @@ def fetch_venmo_payments():
 
 def fetch_paypal_payments():
     settings = load_settings()
+    search_term = settings.get('paypal_search_term', 'sent you')
     accounts = load_payment_accounts('PayPal')
     users = load_users()
     count = 0
@@ -239,7 +232,7 @@ def fetch_paypal_payments():
             mail = imaplib.IMAP4_SSL(acc['imap_server'], acc['port'])
             mail.login(acc['email'], acc['password'])
             mail.select('inbox')
-            criteria = f'(SUBJECT "{settings.get("paypal_search_term", "sent you")}")'
+            criteria = f'(SUBJECT "{search_term}")'
             status, messages = mail.search(None, criteria)
             if status == 'OK':
                 for e_id in messages[0].split()[-50:]:
@@ -258,6 +251,7 @@ def fetch_paypal_payments():
 
 def fetch_zelle_payments():
     settings = load_settings()
+    search_term = settings.get('zelle_search_term', 'received')
     accounts = load_payment_accounts('Zelle')
     users = load_users()
     count = 0
@@ -269,7 +263,7 @@ def fetch_zelle_payments():
             mail = imaplib.IMAP4_SSL(acc['imap_server'], acc['port'])
             mail.login(acc['email'], acc['password'])
             mail.select('inbox')
-            criteria = f'(SUBJECT "{settings.get("zelle_search_term", "received")}")'
+            criteria = f'(SUBJECT "{search_term}")'
             status, messages = mail.search(None, criteria)
             if status == 'OK':
                 for e_id in messages[0].split()[-50:]:
