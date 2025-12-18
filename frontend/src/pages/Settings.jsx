@@ -10,28 +10,22 @@ const Settings = () => {
     });
     
     const [servers, setServers] = useState([]);
-    const [scanners, setScanners] = useState([]);
     const [loading, setLoading] = useState(true);
     
+    // Forms
     const [serverForm, setServerForm] = useState({ id: null, name: '', token: '', url: '' });
-    const [scannerForm, setScannerForm] = useState({ id: null, type: 'Venmo', email: '', password: '', imap_server: 'imap.gmail.com', port: 993, enabled: true });
-    
     const [isEditingServer, setIsEditingServer] = useState(false);
-    const [isEditingScanner, setIsEditingScanner] = useState(false);
     const [testResults, setTestResults] = useState({});
 
     useEffect(() => {
         const loadData = async () => {
             try {
-                const [sets, srvs, scans] = await Promise.all([
+                const [sets, srvs] = await Promise.all([
                     apiGet('/settings'),
-                    apiGet('/settings/servers'),
-                    apiGet('/settings/payment_accounts')
+                    apiGet('/settings/servers')
                 ]);
                 setSettings(prev => ({ ...prev, ...sets }));
                 setServers((srvs.plex || []).filter(s => s.name));
-                // Safety check to ensure scans is an array
-                setScanners(Array.isArray(scans) ? scans : []);
             } catch (e) { console.error(e); }
             setLoading(false);
         };
@@ -71,32 +65,6 @@ const Settings = () => {
         } catch (e) { setTestResults(prev => ({ ...prev, [server.id]: '❌ Error' })); }
     };
 
-    // --- PAYMENT SCANNERS ---
-    const handleSaveScanner = async () => {
-        try {
-            if (isEditingScanner) {
-                await apiPut(`/settings/payment_accounts/${scannerForm.id}`, scannerForm, localStorage.getItem('admin_token'));
-            } else {
-                await apiPost("/settings/payment_accounts", scannerForm, localStorage.getItem('admin_token'));
-            }
-            window.location.reload();
-        } catch (e) { alert("Scanner save failed"); }
-    };
-
-    const handleDeleteScanner = async (id) => {
-        if(!window.confirm("Remove scanner account?")) return;
-        await apiDelete(`/settings/payment_accounts/${id}`, localStorage.getItem('admin_token'));
-        window.location.reload();
-    };
-
-    const handleTestScanner = async (scanner) => {
-        setTestResults(prev => ({ ...prev, [`scan_${scanner.id}`]: 'Testing...' }));
-        try {
-            const res = await apiPost("/settings/test/email", scanner);
-            setTestResults(prev => ({ ...prev, [`scan_${scanner.id}`]: res.status === 'success' ? '✅ OK' : '❌ Fail' }));
-        } catch (e) { setTestResults(prev => ({ ...prev, [`scan_${scanner.id}`]: '❌ Error' })); }
-    };
-
     if (loading) return <div>Loading...</div>;
 
     return (
@@ -117,56 +85,7 @@ const Settings = () => {
                 </div>
             </div>
 
-            {/* 2. PAYMENT SCANNERS */}
-            <div className="card" style={{marginBottom:'20px'}}>
-                <h3>Payment Scanners (IMAP)</h3>
-                <table className="table" style={{marginBottom:'15px'}}>
-                    <thead><tr><th>Type</th><th>Email</th><th>Server</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        {Array.isArray(scanners) && scanners.map(s => (
-                            <tr key={s.id}>
-                                <td><span style={{fontWeight:'bold'}}>{s.type}</span></td>
-                                <td>{s.email}</td>
-                                <td>{s.imap_server}</td>
-                                <td>
-                                    <div className="flex" style={{gap:'5px', alignItems:'center'}}>
-                                        <button className="button" style={{padding:'4px', fontSize:'0.7rem', backgroundColor:'#64748b'}} onClick={()=>handleTestScanner(s)}>Test</button>
-                                        <button className="button" style={{padding:'4px', fontSize:'0.7rem'}} onClick={()=>{setScannerForm(s); setIsEditingScanner(true);}}>Edit</button>
-                                        <button className="button" style={{padding:'4px', fontSize:'0.7rem', backgroundColor:'var(--danger)'}} onClick={()=>handleDeleteScanner(s.id)}>Del</button>
-                                        {testResults[`scan_${s.id}`] && <span className="small">{testResults[`scan_${s.id}`]}</span>}
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-                
-                <div style={{borderTop:'1px solid var(--border)', paddingTop:'10px'}}>
-                    <h4>{isEditingScanner ? 'Edit Scanner' : 'Add Scanner'}</h4>
-                    <div className="flex" style={{gap:'10px', flexWrap:'wrap', marginBottom:'10px'}}>
-                        <select className="input" value={scannerForm.type} onChange={e=>setScannerForm({...scannerForm, type: e.target.value})} style={{flex:1}}>
-                            <option value="Venmo">Venmo</option>
-                            <option value="Zelle">Zelle</option>
-                            <option value="PayPal">PayPal</option>
-                        </select>
-                        <input className="input" placeholder="Email" value={scannerForm.email} onChange={e=>setScannerForm({...scannerForm, email: e.target.value})} style={{flex:2}} />
-                        <input className="input" type="password" placeholder="App Password" value={scannerForm.password} onChange={e=>setScannerForm({...scannerForm, password: e.target.value})} style={{flex:2}} />
-                    </div>
-                    <div className="flex" style={{gap:'10px', flexWrap:'wrap'}}>
-                        <input className="input" placeholder="IMAP Server" value={scannerForm.imap_server} onChange={e=>setScannerForm({...scannerForm, imap_server: e.target.value})} style={{flex:2}} />
-                        <input className="input" placeholder="Port" type="number" value={scannerForm.port} onChange={e=>setScannerForm({...scannerForm, port: parseInt(e.target.value)})} style={{flex:1}} />
-                        <label style={{display:'flex', alignItems:'center', gap:'5px', flex:1, cursor:'pointer'}}>
-                            <input type="checkbox" checked={scannerForm.enabled} onChange={e=>setScannerForm({...scannerForm, enabled: e.target.checked})} /> Enable
-                        </label>
-                    </div>
-                    <div className="flex" style={{gap:'10px', marginTop:'10px'}}>
-                        <button className="button" onClick={handleSaveScanner}>Save Scanner</button>
-                        {isEditingScanner && <button className="button" style={{backgroundColor:'#64748b'}} onClick={()=>{setIsEditingScanner(false); setScannerForm({id:null, type:'Venmo', email:'', password:'', imap_server:'imap.gmail.com', port:993, enabled:true});}}>Cancel</button>}
-                    </div>
-                </div>
-            </div>
-
-            {/* 3. PLEX SERVERS */}
+            {/* 2. PLEX SERVERS */}
             <div className="card" style={{marginBottom:'20px'}}>
                 <h3>Plex Servers (For Sync)</h3>
                 <table className="table" style={{marginBottom:'15px'}}>
@@ -202,7 +121,7 @@ const Settings = () => {
                 </div>
             </div>
 
-            {/* 4. NOTIFICATIONS */}
+            {/* 3. NOTIFICATIONS */}
             <div className="card" style={{marginBottom:'20px'}}>
                 <h3>Notifications (SMTP)</h3>
                 <div className="flex" style={{gap:'10px', marginBottom:'10px'}}>

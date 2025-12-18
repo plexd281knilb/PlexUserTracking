@@ -20,16 +20,14 @@ def scan_zelle():
 # --- 2. ACCOUNT MANAGEMENT ---
 @payments_bp.route('/accounts/<string:service_type>', methods=['GET'])
 def get_service_accounts(service_type):
-    # Uses the case-insensitive loader
+    # This calls the case-insensitive loader from database.py
     return jsonify(load_payment_accounts(service_type))
 
 @payments_bp.route('/accounts/<string:service_type>', methods=['POST'])
 def add_service_account(service_type):
     data = request.json
-    if not data:
-        return jsonify({'error': 'No data provided'}), 400
-
-    # Normalize type to match Fetcher logic (Venmo, PayPal, Zelle)
+    if not data: return jsonify({'error': 'No data'}), 400
+    
     sType = service_type.lower()
     if sType == 'venmo': data['type'] = 'Venmo'
     elif sType == 'zelle': data['type'] = 'Zelle'
@@ -56,7 +54,6 @@ def delete_service_account(service_type, acc_id):
 def delete_log():
     log_to_delete = request.json
     logs = load_payment_logs()
-    # Filter out exact match
     logs = [l for l in logs if not (l.get('raw_text') == log_to_delete.get('raw_text') and l.get('date') == log_to_delete.get('date'))]
     save_data('payment_logs', logs)
     return jsonify({'message': 'Log deleted'})

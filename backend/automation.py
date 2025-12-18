@@ -28,7 +28,7 @@ def check_automation():
             amount = float(str(user.get('last_payment_amount', '0')).replace('$','').replace(',',''))
             
             paid_thru = last_paid
-            days_before = 3 # Default fallback
+            days_before = 3 # Default
             
             if user['payment_freq'] == 'Yearly' and yearly_fee > 0:
                 years = int(amount // yearly_fee)
@@ -52,27 +52,19 @@ def check_automation():
 
             # --- WARNING EMAIL ---
             if today == warning_date and user.get('email'):
-                print(f"Sending warning to {user['username']}")
                 prefix = 'email_monthly' if user['payment_freq'] == 'Monthly' else 'email_yearly'
                 subject = settings.get(f'{prefix}_subject', 'Subscription Reminder')
                 body_tmpl = settings.get(f'{prefix}_body', 'Your subscription is due on {due_date}.')
-                
-                body = body_tmpl.replace('{full_name}', user.get('full_name', 'User'))\
-                                .replace('{username}', user.get('username', ''))\
-                                .replace('{due_date}', str(paid_thru_date))
-                                
+                body = body_tmpl.replace('{full_name}', user.get('full_name', 'User')).replace('{username}', user.get('username', '')).replace('{due_date}', str(paid_thru_date))
                 send_notification_email(user['email'], subject, body)
 
             # --- DISABLE (DB ONLY) ---
             if today >= disable_date:
-                print(f"Disabling {user['username']} (Expired {paid_thru_date})")
                 user['status'] = 'Disabled'
-                
                 if user.get('email'):
                     subject = "Account Disabled"
                     body = f"Hi {user.get('full_name', 'User')},\n\nYour subscription expired on {paid_thru_date}. Your account has been marked as Disabled."
                     send_notification_email(user['email'], subject, body)
-                
                 updated = True
 
         except Exception as e:
