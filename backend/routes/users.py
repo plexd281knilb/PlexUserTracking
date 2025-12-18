@@ -72,5 +72,5 @@ def unmap_payment():
 
 @users_bp.route('/import/plex', methods=['POST'])
 def import_plex():
-    count = fetch_all_plex_users()
-    return jsonify({'message': f'Imported {count} new users'})
+    stats = fetch_all_plex_users()
+    return jsonify({'message': f"Sync Complete: +{stats['added']} Added, -{stats['removed']} Removed"})

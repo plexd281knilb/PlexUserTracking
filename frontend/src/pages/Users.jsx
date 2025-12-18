@@ -117,12 +117,12 @@ const Users = () => {
         fetchData();
     };
 
-    const handleImport = async (source) => {
+    const handleSync = async () => {
         setLoading(true);
         try {
-            const res = await apiPost(`/users/import/${source}`, {}, localStorage.getItem('admin_token'));
+            const res = await apiPost(`/users/import/plex`, {}, localStorage.getItem('admin_token'));
             alert(res.message); fetchData();
-        } catch (e) { alert('Import failed.'); }
+        } catch (e) { alert('Sync failed.'); }
         setLoading(false);
     };
 
@@ -145,7 +145,7 @@ const Users = () => {
                 <h1>User Management</h1>
                 <div className="flex" style={{gap: '10px'}}>
                     <button className="button" style={{backgroundColor: '#64748b'}} onClick={handleRemap}>🔄 Re-Map Payments</button>
-                    <button className="button" onClick={() => handleImport('plex')}>Import Plex Users</button>
+                    <button className="button" onClick={handleSync}>Sync Plex Users</button>
                 </div>
             </div>
 

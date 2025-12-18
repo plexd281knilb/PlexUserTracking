@@ -17,7 +17,6 @@ const Settings = () => {
     const [scanners, setScanners] = useState([]);
     const [loading, setLoading] = useState(true);
     
-    // Forms
     const [serverForm, setServerForm] = useState({ id: null, name: '', token: '', url: '' });
     const [scannerForm, setScannerForm] = useState({ id: null, type: 'Venmo', email: '', password: '', imap_server: 'imap.gmail.com', port: 993, enabled: true });
     

@@ -53,7 +53,6 @@ def send_notification_email(to_email, subject, body):
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
 
-        # Standard SSL connection
         server = smtplib.SMTP_SSL(host, int(port))
         server.login(user, password)
         server.send_message(msg)
@@ -64,7 +63,7 @@ def send_notification_email(to_email, subject, body):
         print(f"Failed to send email to {to_email}: {e}")
         return False
 
-# --- PAYMENT PROCESSING (WITH RECEIPT) ---
+# --- PAYMENT PROCESSING ---
 def process_payment(users, sender_name, amount_str, date_obj, service_name, existing_logs=None, save_db=True):
     date_str = datetime.now().strftime('%Y-%m-%d')
     try:
@@ -91,14 +90,12 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
             user['last_paid'] = date_str
             user['last_payment_amount'] = amount_str
             
-            # Simple Status Update (No Plex Logic)
-            if user['status'] != 'Active':
-                user['status'] = 'Active'
+            if user['status'] != 'Active': user['status'] = 'Active'
                 
             log_entry['status'] = "Matched"
             log_entry['mapped_user'] = user['username']
             
-            # --- SEND PAYMENT RECEIPT ---
+            # Send Receipt
             if save_db and user.get('email'):
                 settings = load_settings()
                 subject = settings.get('email_receipt_subject', 'Payment Received')
@@ -120,7 +117,7 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
 def fetch_venmo_payments():
     settings = load_settings()
     search_term = settings.get('venmo_search_term', 'paid you')
-    accounts = load_payment_accounts('venmo')
+    accounts = load_payment_accounts('Venmo') # Capitalized matches Frontend
     users = load_users()
     count = 0
     errors = []
@@ -147,13 +144,13 @@ def fetch_venmo_payments():
                 try: mail.logout()
                 except: pass
     save_users(users)
-    save_payment_accounts('venmo', accounts)
+    save_payment_accounts('Venmo', accounts)
     return {"count": count, "errors": errors}
 
 def fetch_paypal_payments():
     settings = load_settings()
     search_term = settings.get('paypal_search_term', 'sent you')
-    accounts = load_payment_accounts('paypal')
+    accounts = load_payment_accounts('PayPal') # Capitalized
     users = load_users()
     count = 0
     errors = []
@@ -179,13 +176,13 @@ def fetch_paypal_payments():
                 try: mail.logout()
                 except: pass
     save_users(users)
-    save_payment_accounts('paypal', accounts)
+    save_payment_accounts('PayPal', accounts)
     return {"count": count, "errors": errors}
 
 def fetch_zelle_payments():
     settings = load_settings()
     search_term = settings.get('zelle_search_term', 'received')
-    accounts = load_payment_accounts('zelle')
+    accounts = load_payment_accounts('Zelle') # Capitalized
     users = load_users()
     count = 0
     errors = []
@@ -210,31 +207,65 @@ def fetch_zelle_payments():
                 try: mail.logout()
                 except: pass
     save_users(users)
-    save_payment_accounts('zelle', accounts)
+    save_payment_accounts('Zelle', accounts)
     return {"count": count, "errors": errors}
 
+# --- SYNC PLEX USERS ---
 def fetch_all_plex_users():
     servers = load_servers()['plex']
-    users = load_users()
-    count = 0
+    current_db_users = load_users()
+    
+    active_plex_friends = {} 
+    
     for server in servers:
+        token = server.get('token')
+        if not token: continue
         try:
-            r = requests.get('https://plex.tv/api/users', headers={'X-Plex-Token': server['token']}, timeout=10)
+            headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
+            r = requests.get('https://plex.tv/api/users', headers=headers, timeout=10)
             if r.status_code == 200:
                 root = ET.fromstring(r.content)
                 for u in root.findall('User'):
-                    email = u.get('email', '').lower()
-                    username = u.get('username')
-                    if not email: continue
-                    if not any(curr['email'].lower() == email for curr in users):
-                        new_id = (max([x['id'] for x in users], default=0) + 1)
-                        users.append({"id": new_id, "username": username, "email": email, "full_name": "", "status": "Pending", "payment_freq": "Exempt", "last_paid": "Never"})
-                        count += 1
+                    email = u.get('email', '').lower().strip()
+                    username = u.get('username', '').strip()
+                    if email:
+                        active_plex_friends[email] = { "username": username, "email": email }
         except: pass
-    save_users(users)
-    return count
 
-# --- RESTORED FUNCTIONS (FIXES IMPORT ERROR) ---
+    final_users_list = []
+    existing_emails = set()
+    added_count = 0
+    removed_count = 0
+    
+    # Update existing
+    for db_user in current_db_users:
+        u_email = db_user.get('email', '').lower().strip()
+        if u_email in active_plex_friends:
+            plex_data = active_plex_friends[u_email]
+            if plex_data['username']: db_user['username'] = plex_data['username']
+            final_users_list.append(db_user)
+            existing_emails.add(u_email)
+        else:
+            removed_count += 1
+            
+    # Add new
+    max_id = max([u.get('id', 0) for u in final_users_list] + [0])
+    for email, p_data in active_plex_friends.items():
+        if email not in existing_emails:
+            max_id += 1
+            final_users_list.append({
+                "id": max_id,
+                "username": p_data['username'],
+                "email": email,
+                "full_name": "",
+                "status": "Pending",
+                "payment_freq": "Exempt",
+                "last_paid": "Never"
+            })
+            added_count += 1
+            
+    save_users(final_users_list)
+    return {"added": added_count, "removed": removed_count}
 
 def test_plex_connection(token, url="https://plex.tv/api/users"):
     try:
@@ -261,7 +292,6 @@ def get_plex_libraries(token, manual_url=None):
                 libraries.append({ "id": d.get('key'), "title": d.get('title'), "type": d.get('type') })
             return {"status": "success", "libraries": libraries, "server_name": server_name}
         except: return {"error": "Parsing Failed"}
-
     if manual_url:
         try:
             res = requests.get(f"{manual_url}/library/sections", headers=headers, timeout=5, verify=False)

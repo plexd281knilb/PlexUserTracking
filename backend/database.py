@@ -1,124 +1,79 @@
 import json
 import os
 
-# --- PERSISTENCE SETUP ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, 'data')
-
+# Define data directory relative to this file
+DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
 
-def get_path(filename):
-    return os.path.join(DATA_DIR, filename)
-
 FILES = {
-    'users': 'users.json',
-    'settings': 'settings.json',
-    'servers': 'servers.json',
-    'payment_logs': 'payment_logs.json',
-    'payment_accounts': 'payment_accounts.json',
-    'expenses': 'expenses.json'
+    'users': os.path.join(DATA_DIR, 'users.json'),
+    'payment_logs': os.path.join(DATA_DIR, 'payment_logs.json'),
+    'settings': os.path.join(DATA_DIR, 'settings.json'),
+    'servers': os.path.join(DATA_DIR, 'servers.json'),
+    'payment_accounts': os.path.join(DATA_DIR, 'payment_accounts.json'),
+    'expenses': os.path.join(DATA_DIR, 'expenses.json')
 }
 
-# --- Generic Load/Save ---
 def load_data(key, default=None):
-    if default is None: default = []
-    filename = FILES.get(key, f"{key}.json")
-    filepath = get_path(filename)
-    
+    filepath = FILES.get(key)
+    if not filepath: return default
     if not os.path.exists(filepath):
-        save_data(key, default)
-        return default
+        with open(filepath, 'w') as f:
+            json.dump(default if default is not None else [], f, indent=4)
+        return default if default is not None else []
     try:
         with open(filepath, 'r') as f:
             return json.load(f)
-    except: return default
+    except:
+        return default if default is not None else []
 
 def save_data(key, data):
-    filepath = get_path(FILES.get(key, f"{key}.json"))
-    with open(filepath, 'w') as f:
-        json.dump(data, f, indent=4)
+    filepath = FILES.get(key)
+    if filepath:
+        with open(filepath, 'w') as f:
+            json.dump(data, f, indent=4)
 
-# --- Settings ---
+# --- Type-Specific Helpers ---
+
+def load_users():
+    return load_data('users', [])
+
+def save_users(users):
+    save_data('users', users)
+
+def load_payment_logs():
+    return load_data('payment_logs', [])
+
 def load_settings():
-    defaults = {
-        "fee_monthly": "0.00", "fee_yearly": "0.00", 
-        "plex_auto_ban": True, "plex_auto_invite": True, 
-        "default_library_ids": [],
-        "venmo_search_term": "paid you",
-        "paypal_search_term": "sent you",
-        "zelle_search_term": "received"
-    }
-    data = load_data('settings', defaults)
-    for k, v in defaults.items(): 
-        if k not in data: data[k] = v
-    return data
-def save_settings(data): save_data('settings', data)
+    return load_data('settings', {})
 
-# --- Users ---
-def load_users(): return load_data('users', [])
-def save_users(data): save_data('users', data)
-def delete_user(user_id):
-    users = load_users()
-    users = [u for u in users if u['id'] != user_id]
-    save_users(users)
+def save_settings(settings):
+    save_data('settings', settings)
 
-# --- Servers ---
 def load_servers():
-    defaults = {'plex': []}
-    data = load_data('servers', defaults)
-    if 'plex' not in data: data['plex'] = []
-    return data
-def save_servers(data): save_data('servers', data)
-def add_server(type, data):
-    servers = load_servers()
-    if type not in servers: servers[type] = []
-    data['id'] = (max([s['id'] for s in servers[type]], default=0) + 1)
-    servers[type].append(data)
-    save_servers(servers)
-    return data
-def delete_server(type, sid):
-    servers = load_servers()
-    if type in servers:
-        servers[type] = [s for s in servers[type] if s['id'] != sid]
-        save_servers(servers)
+    return load_data('servers', {"plex": []})
 
-def load_payment_accounts(service=None):
-    defaults = {'venmo': [], 'paypal': [], 'zelle': []}
-    data = load_data('payment_accounts', defaults)
-    for k in defaults: 
-        if k not in data: data[k] = []
-    if service: return data.get(service, [])
-    return data
-def save_payment_accounts(service, accounts):
-    data = load_payment_accounts()
-    data[service] = accounts
-    save_data('payment_accounts', data)
+def load_expenses():
+    return load_data('expenses', [])
 
-# --- LOGS ---
-def load_payment_logs(): return load_data('payment_logs', [])
-def save_payment_log(log):
-    logs = load_payment_logs()
-    if not any(l['raw_text'] == log['raw_text'] and l['date'] == log['date'] for l in logs):
-        logs.insert(0, log)
-        save_data('payment_logs', logs)
+def load_payment_accounts(type_filter=None):
+    accounts = load_data('payment_accounts', [])
+    if type_filter:
+        # Case-insensitive comparison
+        tf = type_filter.lower()
+        return [acc for acc in accounts if acc.get('type', '').lower() == tf]
+    return accounts
 
-def delete_payment_log(log_data):
-    logs = load_payment_logs()
-    new_logs = [l for l in logs if not (l.get('date') == log_data.get('date') and l.get('raw_text') == log_data.get('raw_text'))]
-    save_data('payment_logs', new_logs)
-
-def load_expenses(): return load_data('expenses', [])
-def save_expenses(data): save_data('expenses', data)
-def add_expense(data):
-    expenses = load_expenses()
-    data['id'] = (max([e['id'] for e in expenses], default=0) + 1)
-    expenses.append(data)
-    save_expenses(expenses)
-    return data
-def delete_expense(eid):
-    expenses = load_expenses()
-    initial = len(expenses)
-    expenses = [e for e in expenses if e['id'] != eid]
-    if len(expenses) < initial: save_expenses(expenses); return True
-    return False
+def save_payment_accounts(type_key, updated_list):
+    all_accounts = load_data('payment_accounts', [])
+    # Remove old entries of this type (Case-insensitive)
+    tf = type_key.lower()
+    others = [acc for acc in all_accounts if acc.get('type', '').lower() != tf]
+    
+    # Add new entries
+    for acc in updated_list:
+        acc['type'] = type_key 
+    
+    final_list = others + updated_list
+    save_data('payment_accounts', final_list)

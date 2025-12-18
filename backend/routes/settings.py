@@ -4,7 +4,7 @@ from integrations import get_plex_libraries, test_plex_connection, test_email_co
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/api/settings')
 
-# --- GENERAL SETTINGS ---
+# --- GENERAL ---
 @settings_bp.route('', methods=['GET'])
 def get_settings():
     return jsonify(load_settings())
@@ -17,7 +17,7 @@ def update_settings():
     save_settings(current)
     return jsonify({'message': 'Settings saved successfully'})
 
-# --- PLEX SERVER MANAGEMENT ---
+# --- PLEX SERVERS ---
 @settings_bp.route('/servers', methods=['GET'])
 def get_servers():
     return jsonify(load_servers())
@@ -90,7 +90,6 @@ def delete_payment_account(acc_id):
 @settings_bp.route('/test/email', methods=['POST'])
 def test_email_route():
     data = request.json
-    # Expects: imap_server, port, email, password
     res = test_email_connection(data.get('imap_server'), data.get('port'), data.get('email'), data.get('password'))
     return jsonify(res)
 
