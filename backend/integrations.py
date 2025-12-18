@@ -34,7 +34,7 @@ def get_email_subject(msg):
             subject += str(token)
     return subject.strip()
 
-# --- EMAIL NOTIFICATION ---
+# --- EMAIL LOGIC ---
 def send_notification_email(to_email, subject, body):
     settings = load_settings()
     host = settings.get('smtp_host', '')
@@ -63,7 +63,7 @@ def send_notification_email(to_email, subject, body):
         print(f"Failed to send email to {to_email}: {e}")
         return False
 
-# --- PAYMENT PROCESSING ---
+# --- PAYMENT PROCESSING (WITH RECEIPT) ---
 def process_payment(users, sender_name, amount_str, date_obj, service_name, existing_logs=None, save_db=True):
     date_str = datetime.now().strftime('%Y-%m-%d')
     try:
@@ -90,12 +90,23 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
             user['last_paid'] = date_str
             user['last_payment_amount'] = amount_str
             
-            # Simple Status Update (No Plex Logic)
-            if user['status'] != 'Active':
-                user['status'] = 'Active'
+            if user['status'] != 'Active': user['status'] = 'Active'
                 
             log_entry['status'] = "Matched"
             log_entry['mapped_user'] = user['username']
+            
+            # --- SEND PAYMENT RECEIPT ---
+            if save_db and user.get('email'):
+                settings = load_settings()
+                subject = settings.get('email_receipt_subject', 'Payment Received')
+                body_tmpl = settings.get('email_receipt_body', 'Thank you for your payment of {amount}. You have been marked as paid.')
+                
+                body = body_tmpl.replace('{full_name}', user.get('full_name', 'User'))\
+                                .replace('{username}', user.get('username', ''))\
+                                .replace('{amount}', amount_str)
+                
+                send_notification_email(user['email'], subject, body)
+            
             break
     
     if save_db:
@@ -109,7 +120,7 @@ def fetch_venmo_payments():
     search_term = settings.get('venmo_search_term', 'paid you')
     accounts = load_payment_accounts('venmo')
     users = load_users()
-    count = 0
+    payment_count = 0
     errors = []
     venmo_pattern = re.compile(r"^(.*?) paid you (\$\d+\.\d{2})", re.IGNORECASE)
     for acc in accounts:

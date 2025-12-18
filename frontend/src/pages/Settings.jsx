@@ -4,13 +4,11 @@ import { apiGet, apiPost, apiPut, apiDelete } from 'api';
 const Settings = () => {
     const [settings, setSettings] = useState({
         // Financials
-        fee_monthly: "0.00",
-        fee_yearly: "0.00",
-        scan_interval_min: 60,
+        fee_monthly: "0.00", fee_yearly: "0.00", scan_interval_min: 60,
+        // Automation Timing
+        notify_days_monthly: 3, notify_days_yearly: 7,
         // Search Terms
-        venmo_search_term: 'paid you',
-        paypal_search_term: 'sent you',
-        zelle_search_term: 'received',
+        venmo_search_term: 'paid you', paypal_search_term: 'sent you', zelle_search_term: 'received',
         // SMTP
         smtp_host: "", smtp_port: 465, smtp_user: "", smtp_pass: ""
     });
@@ -18,7 +16,6 @@ const Settings = () => {
     const [servers, setServers] = useState([]);
     const [loading, setLoading] = useState(true);
     
-    // Server Form & Testing
     const [serverForm, setServerForm] = useState({ id: null, name: '', token: '', url: '' });
     const [isEditingServer, setIsEditingServer] = useState(false);
     const [testResults, setTestResults] = useState({});
@@ -46,7 +43,7 @@ const Settings = () => {
         } catch (e) { alert('Save failed'); }
     };
 
-    // --- PLEX SERVERS (For Import Only) ---
+    // --- PLEX SERVERS (For Import) ---
     const handleSaveServer = async () => {
         try {
             if (isEditingServer) {
@@ -69,9 +66,7 @@ const Settings = () => {
         try {
             const res = await apiPost("/settings/test/plex", { token: server.token, url: server.url });
             setTestResults(prev => ({ ...prev, [server.id]: res.status === 'success' ? '✅ OK' : '❌ Fail' }));
-        } catch (e) {
-            setTestResults(prev => ({ ...prev, [server.id]: '❌ Error' }));
-        }
+        } catch (e) { setTestResults(prev => ({ ...prev, [server.id]: '❌ Error' })); }
     };
 
     if (loading) return <div>Loading...</div>;
@@ -80,9 +75,9 @@ const Settings = () => {
         <div style={{ maxWidth: '900px', margin: '0 auto', paddingBottom: '50px' }}>
             <h1>System Settings</h1>
 
-            {/* 1. FINANCIALS & SCANNING */}
+            {/* 1. FINANCIALS & AUTOMATION TIMING */}
             <div className="card" style={{marginBottom:'20px'}}>
-                <h3>Financials & Scanning</h3>
+                <h3>Financials & Automation Schedule</h3>
                 <div className="flex" style={{gap:'20px', marginBottom:'15px'}}>
                     <div style={{flex:1}}>
                         <label className="small">Monthly Fee ($)</label>
@@ -92,16 +87,23 @@ const Settings = () => {
                         <label className="small">Yearly Fee ($)</label>
                         <input className="input" value={settings.fee_yearly} onChange={e=>setSettings({...settings, fee_yearly: e.target.value})} placeholder="0.00" />
                     </div>
+                </div>
+                
+                <hr style={{borderColor:'var(--border)', margin:'15px 0'}}/>
+                
+                <div className="flex" style={{gap:'20px'}}>
+                    <div style={{flex:1}}>
+                        <label className="small">Monthly Reminder (Days Before Due)</label>
+                        <input className="input" type="number" value={settings.notify_days_monthly} onChange={e=>setSettings({...settings, notify_days_monthly: parseInt(e.target.value)})} />
+                    </div>
+                    <div style={{flex:1}}>
+                        <label className="small">Yearly Reminder (Days Before Due)</label>
+                        <input className="input" type="number" value={settings.notify_days_yearly} onChange={e=>setSettings({...settings, notify_days_yearly: parseInt(e.target.value)})} />
+                    </div>
                     <div style={{flex:1}}>
                         <label className="small">Scan Interval (min)</label>
                         <input className="input" type="number" value={settings.scan_interval_min} onChange={e=>setSettings({...settings, scan_interval_min: parseInt(e.target.value)})} />
                     </div>
-                </div>
-                <label className="small">Email Search Terms</label>
-                <div className="flex" style={{gap:'10px', marginTop:'5px'}}>
-                    <input className="input" placeholder="Venmo" value={settings.venmo_search_term} onChange={e=>setSettings({...settings, venmo_search_term: e.target.value})} />
-                    <input className="input" placeholder="PayPal" value={settings.paypal_search_term} onChange={e=>setSettings({...settings, paypal_search_term: e.target.value})} />
-                    <input className="input" placeholder="Zelle" value={settings.zelle_search_term} onChange={e=>setSettings({...settings, zelle_search_term: e.target.value})} />
                 </div>
             </div>
 

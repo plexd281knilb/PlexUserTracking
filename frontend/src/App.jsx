@@ -6,10 +6,15 @@ import Users from './pages/Users';
 import Settings from './pages/Settings';
 import Dashboard from './pages/Dashboard';
 import Expenses from './pages/Expenses';
-import Upcoming from './pages/Upcoming'; // NEW IMPORT
+import Upcoming from './pages/Upcoming';
 import Venmo from './pages/payments/Venmo';
 import Zelle from './pages/payments/Zelle';
 import Paypal from './pages/payments/Paypal';
+
+// New Email Pages
+import MonthlyEmails from './pages/emails/MonthlyEmails';
+import YearlyEmails from './pages/emails/YearlyEmails';
+import PaymentReceipts from './pages/emails/PaymentReceipts';
 
 import './styles.css';
 
@@ -33,43 +38,31 @@ function App() {
                     <nav className="sidebar">
                         <h2>PLEX TRACKER</h2>
                         
-                        {/* DASHBOARD SECTION */}
                         <div className="nav-group">
                             <div className="nav-label">DASHBOARD</div>
-                            <NavLink to="/dashboard" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
-                                📊 Overview
-                            </NavLink>
-                            <NavLink to="/users" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
-                                👥 Users
-                            </NavLink>
-                            <NavLink to="/upcoming" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
-                                📅 Upcoming
-                            </NavLink>
+                            <NavLink to="/dashboard" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>📊 Overview</NavLink>
+                            <NavLink to="/users" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>👥 Users</NavLink>
+                            <NavLink to="/upcoming" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>📅 Upcoming</NavLink>
                         </div>
 
-                        {/* PAYMENTS SECTION */}
                         <div className="nav-group">
                             <div className="nav-label">PAYMENTS</div>
-                            <NavLink to="/payments/venmo" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
-                                🔵 Venmo
-                            </NavLink>
-                            <NavLink to="/payments/zelle" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
-                                🟣 Zelle
-                            </NavLink>
-                            <NavLink to="/payments/paypal" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
-                                💳 PayPal
-                            </NavLink>
+                            <NavLink to="/payments/venmo" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>🔵 Venmo</NavLink>
+                            <NavLink to="/payments/zelle" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>🟣 Zelle</NavLink>
+                            <NavLink to="/payments/paypal" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>💳 PayPal</NavLink>
                         </div>
 
-                        {/* SYSTEM SECTION */}
+                        <div className="nav-group">
+                            <div className="nav-label">EMAIL AUTOMATION</div>
+                            <NavLink to="/emails/monthly" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>📅 Monthly Reminders</NavLink>
+                            <NavLink to="/emails/yearly" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>📆 Yearly Reminders</NavLink>
+                            <NavLink to="/emails/receipt" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>🧾 Payment Receipts</NavLink>
+                        </div>
+
                         <div className="nav-group">
                             <div className="nav-label">SYSTEM</div>
-                            <NavLink to="/expenses" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
-                                💰 Expenses
-                            </NavLink>
-                            <NavLink to="/settings" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
-                                ⚙️ Settings
-                            </NavLink>
+                            <NavLink to="/expenses" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>💰 Expenses</NavLink>
+                            <NavLink to="/settings" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>⚙️ Settings</NavLink>
                         </div>
                         
                         <div style={{ marginTop: 'auto' }}>
@@ -89,9 +82,15 @@ function App() {
                             <Route path="/dashboard" element={<Dashboard />} />
                             <Route path="/users" element={<Users />} />
                             <Route path="/upcoming" element={<Upcoming />} />
+                            
                             <Route path="/payments/venmo" element={<Venmo />} />
                             <Route path="/payments/zelle" element={<Zelle />} />
                             <Route path="/payments/paypal" element={<Paypal />} />
+                            
+                            <Route path="/emails/monthly" element={<MonthlyEmails />} />
+                            <Route path="/emails/yearly" element={<YearlyEmails />} />
+                            <Route path="/emails/receipt" element={<PaymentReceipts />} />
+                            
                             <Route path="/expenses" element={<Expenses />} />
                             <Route path="/settings" element={<Settings />} />
                         </Routes>
