@@ -10,7 +10,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import parsedate_to_datetime
 # FIXED IMPORT: Matches database.py exactly
-from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, load_settings, save_data, load_payment_logs
+from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, save_payment_log, load_settings, save_data, load_payment_logs
 
 # --- HELPER FUNCTIONS ---
 def get_email_body(msg):
@@ -188,7 +188,10 @@ def fetch_venmo_payments():
     users = load_users()
     count = 0
     errors = []
-    venmo_pattern = re.compile(r"^(.*?) paid you (\$\d+\.\d{2})", re.IGNORECASE)
+    
+    # Regex to extract Name and Amount
+    venmo_pattern = re.compile(r"^(.*?)\s+paid\s+you\s+(\$\d+(?:,\d+)*(?:\.\d{2})?)", re.IGNORECASE)
+
     for acc in accounts:
         if not acc.get('enabled', True): continue
         mail = None
@@ -203,7 +206,15 @@ def fetch_venmo_payments():
                 for e_id in messages[0].split()[-50:]:
                     _, msg_data = mail.fetch(e_id, '(RFC822)')
                     msg = email.message_from_bytes(msg_data[0][1])
-                    if process_payment(users, get_email_subject(msg), "0", msg["Date"], 'Venmo'): count += 1
+                    subject = get_email_subject(msg)
+                    
+                    # USE REGEX TO PARSE
+                    match = venmo_pattern.search(subject)
+                    if match:
+                        sender = match.group(1).strip()
+                        amount = match.group(2).strip()
+                        if process_payment(users, sender, amount, msg["Date"], 'Venmo'): 
+                            count += 1
             acc['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         except Exception as e: errors.append(str(e))
         finally:
@@ -214,7 +225,7 @@ def fetch_venmo_payments():
                     pass
     save_users(users)
     save_payment_accounts('Venmo', accounts)
-    return {"count": count, "errors": errors}
+    return {"count": count, "errors": errors, "message": f"Scanned {count} Venmo payments."}
 
 def fetch_paypal_payments():
     settings = load_settings()
@@ -223,6 +234,10 @@ def fetch_paypal_payments():
     users = load_users()
     count = 0
     errors = []
+    
+    # Regex to extract Name and Amount
+    paypal_pattern = re.compile(r"(.*?)\s+sent\s+you\s+(\$\d+(?:,\d+)*(?:\.\d{2})?)\s+USD", re.IGNORECASE)
+
     for acc in accounts:
         if not acc.get('enabled', True): continue
         mail = None
@@ -236,7 +251,15 @@ def fetch_paypal_payments():
                 for e_id in messages[0].split()[-50:]:
                     _, msg_data = mail.fetch(e_id, '(RFC822)')
                     msg = email.message_from_bytes(msg_data[0][1])
-                    if process_payment(users, get_email_subject(msg), "0", msg["Date"], 'PayPal'): count += 1
+                    subject = get_email_subject(msg)
+                    
+                    # USE REGEX TO PARSE
+                    match = paypal_pattern.search(subject)
+                    if match:
+                        sender = match.group(1).strip()
+                        amount = match.group(2).strip()
+                        if process_payment(users, sender, amount, msg["Date"], 'PayPal'): 
+                            count += 1
             acc['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         except Exception as e: errors.append(str(e))
         finally:
@@ -247,7 +270,7 @@ def fetch_paypal_payments():
                     pass
     save_users(users)
     save_payment_accounts('PayPal', accounts)
-    return {"count": count, "errors": errors}
+    return {"count": count, "errors": errors, "message": f"Scanned {count} PayPal payments."}
 
 def fetch_zelle_payments():
     settings = load_settings()
@@ -256,6 +279,10 @@ def fetch_zelle_payments():
     users = load_users()
     count = 0
     errors = []
+    
+    # Regex to extract Name and Amount
+    zelle_pattern = re.compile(r"received\s+(\$\d+(?:,\d+)*(?:\.\d{2})?)\s+from\s+(.*)", re.IGNORECASE)
+
     for acc in accounts:
         if not acc.get('enabled', True): continue
         mail = None
@@ -269,7 +296,15 @@ def fetch_zelle_payments():
                 for e_id in messages[0].split()[-50:]:
                     _, msg_data = mail.fetch(e_id, '(RFC822)')
                     msg = email.message_from_bytes(msg_data[0][1])
-                    if process_payment(users, get_email_subject(msg), "0", msg["Date"], 'Zelle'): count += 1
+                    subject = get_email_subject(msg)
+                    
+                    # USE REGEX TO PARSE
+                    match = zelle_pattern.search(subject)
+                    if match:
+                        amount = match.group(1).strip()
+                        sender = match.group(2).strip()
+                        if process_payment(users, sender, amount, msg["Date"], 'Zelle'): 
+                            count += 1
             acc['last_scanned'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         except Exception as e: errors.append(str(e))
         finally:
@@ -280,7 +315,7 @@ def fetch_zelle_payments():
                     pass
     save_users(users)
     save_payment_accounts('Zelle', accounts)
-    return {"count": count, "errors": errors}
+    return {"count": count, "errors": errors, "message": f"Scanned {count} Zelle payments."}
 
 def test_plex_connection(token, url="https://plex.tv/api/users"):
     try:
