@@ -9,8 +9,7 @@ from email.header import decode_header
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import parsedate_to_datetime
-# FIXED IMPORT: Matches database.py exactly
-from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, save_payment_log, load_settings, save_data, load_payment_logs
+from database import load_servers, load_users, save_users, load_payment_accounts, save_payment_accounts, load_settings, save_data, load_payment_logs
 
 # --- HELPER FUNCTIONS ---
 def get_email_body(msg):
@@ -64,58 +63,92 @@ def send_notification_email(to_email, subject, body):
 
 # --- SYNC PLEX USERS ---
 def fetch_all_plex_users():
-    servers = load_servers()['plex']
+    servers = load_servers().get('plex', [])
     current_db_users = load_users()
     
+    if not servers:
+        return {"status": "Error: No Plex Servers configured in Settings"}
+
     active_plex_friends = {} 
     successful_connections = 0
+    connection_errors = []
+
+    print(f"--- STARTING PLEX SYNC ({len(servers)} servers) ---")
 
     for server in servers:
         token = server.get('token')
-        if not token: continue
+        if not token: 
+            connection_errors.append(f"Server {server.get('name')} missing token")
+            continue
+            
         try:
             headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
+            # Fetch friends list from Plex.tv
             r = requests.get('https://plex.tv/api/users', headers=headers, timeout=10)
+            
             if r.status_code == 200:
                 successful_connections += 1
                 root = ET.fromstring(r.content)
+                count_for_server = 0
                 for u in root.findall('User'):
                     email = u.get('email', '').lower().strip()
                     username = u.get('username', '').strip()
+                    # We prioritize email as the unique key, fallback to lowercase username
                     key = email if email else username.lower()
+                    
                     if key:
                         active_plex_friends[key] = { "username": username, "email": email }
-        except: pass
+                        count_for_server += 1
+                print(f"Server {server.get('name')}: Found {count_for_server} friends.")
+            else:
+                connection_errors.append(f"Server {server.get('name')} returned {r.status_code}")
+                print(f"Server {server.get('name')} failed: {r.status_code}")
+        except Exception as e:
+            connection_errors.append(f"Server {server.get('name')} error: {str(e)}")
+            print(f"Server {server.get('name')} exception: {e}")
 
-    if successful_connections == 0 and len(servers) > 0:
-        return {"added": 0, "removed": 0, "status": "Error: Could not connect to Plex"}
+    # SAFETY CHECK: If we couldn't reach ANY server, abort to prevent wiping the DB
+    if successful_connections == 0:
+        error_msg = "; ".join(connection_errors)
+        return {"status": f"Error: Could not connect to any Plex server. Details: {error_msg}"}
 
+    # 2. Rebuild User List (Strict Sync)
     final_users_list = []
     processed_keys = set()
     added_count = 0
     removed_count = 0
     
+    # A. Filter Existing Users
     for db_user in current_db_users:
         u_email = db_user.get('email', '').lower().strip()
-        u_name = db_user.get('username', '').lower().strip()
+        u_name = db_user.get('username', '').strip() # Keep original case for display, but lower for check
+        u_name_lower = u_name.lower()
         
         found_key = None
+        # strict match on email OR username
         if u_email and u_email in active_plex_friends: found_key = u_email
-        elif u_name and u_name in active_plex_friends: found_key = u_name
+        elif u_name_lower and u_name_lower in active_plex_friends: found_key = u_name_lower
             
         if found_key:
+            # User confirmed in Plex -> Update and Keep
             data = active_plex_friends[found_key]
             if data['username']: db_user['username'] = data['username']
             if data['email']: db_user['email'] = data['email']
             final_users_list.append(db_user)
             processed_keys.add(found_key)
         else:
+            # User NOT in Plex -> Remove
+            print(f"Removing user not in Plex: {u_name} ({u_email})")
             removed_count += 1
             
+    # B. Add New Users
     max_id = max([u.get('id', 0) for u in final_users_list] + [0])
+    
     for key, p_data in active_plex_friends.items():
         if key not in processed_keys:
-            is_dup = any(u for u in final_users_list if u['email'] == p_data['email'] or u['username'] == p_data['username'])
+            # Double check duplicates by alternate properties just in case
+            is_dup = any(u for u in final_users_list if u['email'] == p_data['email'] or u['username'].lower() == p_data['username'].lower())
+            
             if not is_dup:
                 max_id += 1
                 final_users_list.append({
@@ -128,8 +161,10 @@ def fetch_all_plex_users():
                     "last_paid": "Never"
                 })
                 added_count += 1
+                print(f"Adding new user: {p_data['username']}")
             
     save_users(final_users_list)
+    print(f"Sync Complete: +{added_count} / -{removed_count}")
     return {"added": added_count, "removed": removed_count}
 
 # --- PAYMENT FETCHERS ---
@@ -149,11 +184,13 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
     if existing_logs is None: existing_logs = load_payment_logs()
     
     raw_text = f"{sender_name} sent {amount_str}"
-    log_entry = next((l for l in existing_logs if l.get('raw_text') == raw_text), None)
-    
-    if not log_entry:
-        log_entry = { "date": date_str, "service": service_name, "sender": sender_name, "amount": amount_str, "raw_text": raw_text, "status": "Unmapped", "mapped_user": None }
-        existing_logs.insert(0, log_entry)
+    # Deduplicate based on raw text and date
+    duplicate = next((l for l in existing_logs if l.get('raw_text') == raw_text and l.get('date') == date_str), None)
+    if duplicate:
+        return False
+
+    log_entry = { "date": date_str, "service": service_name, "sender": sender_name, "amount": amount_str, "raw_text": raw_text, "status": "Unmapped", "mapped_user": None }
+    existing_logs.insert(0, log_entry)
 
     match_found = False
     sender_clean = sender_name.lower().strip()
@@ -179,7 +216,7 @@ def process_payment(users, sender_name, amount_str, date_obj, service_name, exis
     if save_db:
         save_data('payment_logs', existing_logs)
         save_users(users)
-    return match_found
+    return True
 
 def fetch_venmo_payments():
     settings = load_settings()
@@ -189,7 +226,6 @@ def fetch_venmo_payments():
     count = 0
     errors = []
     
-    # Regex to extract Name and Amount
     venmo_pattern = re.compile(r"^(.*?)\s+paid\s+you\s+(\$\d+(?:,\d+)*(?:\.\d{2})?)", re.IGNORECASE)
 
     for acc in accounts:
@@ -207,8 +243,6 @@ def fetch_venmo_payments():
                     _, msg_data = mail.fetch(e_id, '(RFC822)')
                     msg = email.message_from_bytes(msg_data[0][1])
                     subject = get_email_subject(msg)
-                    
-                    # USE REGEX TO PARSE
                     match = venmo_pattern.search(subject)
                     if match:
                         sender = match.group(1).strip()
@@ -219,10 +253,8 @@ def fetch_venmo_payments():
         except Exception as e: errors.append(str(e))
         finally:
             if mail: 
-                try: 
-                    mail.logout()
-                except: 
-                    pass
+                try: mail.logout()
+                except: pass
     save_users(users)
     save_payment_accounts('Venmo', accounts)
     return {"count": count, "errors": errors, "message": f"Scanned {count} Venmo payments."}
@@ -235,7 +267,6 @@ def fetch_paypal_payments():
     count = 0
     errors = []
     
-    # Regex to extract Name and Amount
     paypal_pattern = re.compile(r"(.*?)\s+sent\s+you\s+(\$\d+(?:,\d+)*(?:\.\d{2})?)\s+USD", re.IGNORECASE)
 
     for acc in accounts:
@@ -252,8 +283,6 @@ def fetch_paypal_payments():
                     _, msg_data = mail.fetch(e_id, '(RFC822)')
                     msg = email.message_from_bytes(msg_data[0][1])
                     subject = get_email_subject(msg)
-                    
-                    # USE REGEX TO PARSE
                     match = paypal_pattern.search(subject)
                     if match:
                         sender = match.group(1).strip()
@@ -264,10 +293,8 @@ def fetch_paypal_payments():
         except Exception as e: errors.append(str(e))
         finally:
             if mail: 
-                try: 
-                    mail.logout()
-                except: 
-                    pass
+                try: mail.logout()
+                except: pass
     save_users(users)
     save_payment_accounts('PayPal', accounts)
     return {"count": count, "errors": errors, "message": f"Scanned {count} PayPal payments."}
@@ -280,7 +307,6 @@ def fetch_zelle_payments():
     count = 0
     errors = []
     
-    # Regex to extract Name and Amount
     zelle_pattern = re.compile(r"received\s+(\$\d+(?:,\d+)*(?:\.\d{2})?)\s+from\s+(.*)", re.IGNORECASE)
 
     for acc in accounts:
@@ -297,8 +323,6 @@ def fetch_zelle_payments():
                     _, msg_data = mail.fetch(e_id, '(RFC822)')
                     msg = email.message_from_bytes(msg_data[0][1])
                     subject = get_email_subject(msg)
-                    
-                    # USE REGEX TO PARSE
                     match = zelle_pattern.search(subject)
                     if match:
                         amount = match.group(1).strip()
@@ -309,10 +333,8 @@ def fetch_zelle_payments():
         except Exception as e: errors.append(str(e))
         finally:
             if mail: 
-                try: 
-                    mail.logout()
-                except: 
-                    pass
+                try: mail.logout()
+                except: pass
     save_users(users)
     save_payment_accounts('Zelle', accounts)
     return {"count": count, "errors": errors, "message": f"Scanned {count} Zelle payments."}
