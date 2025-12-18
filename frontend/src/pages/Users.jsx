@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import { apiGet, apiPost, apiPut } from 'api';
 
 const Users = () => {
@@ -6,6 +6,9 @@ const Users = () => {
     const [logs, setLogs] = useState([]);
     const [settings, setSettings] = useState({});
     const [loading, setLoading] = useState(true);
+    
+    // Sort Configuration
+    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
     
     const [selectedIds, setSelectedIds] = useState([]);
     const [editUser, setEditUser] = useState(null);
@@ -27,6 +30,49 @@ const Users = () => {
     };
 
     useEffect(() => { fetchData(); }, []);
+
+    // --- SORTING LOGIC ---
+    const sortedUsers = useMemo(() => {
+        let sortableUsers = [...users];
+        if (sortConfig.key !== null) {
+            sortableUsers.sort((a, b) => {
+                let valA = a[sortConfig.key];
+                let valB = b[sortConfig.key];
+
+                // Handle 'last_paid' specifically to sort 'Never' correctly
+                if (sortConfig.key === 'last_paid') {
+                    if (valA === 'Never' || !valA) valA = '0000-00-00';
+                    if (valB === 'Never' || !valB) valB = '0000-00-00';
+                }
+
+                // Null safety
+                if (valA === null || valA === undefined) valA = '';
+                if (valB === null || valB === undefined) valB = '';
+
+                // Case-insensitive string sorting
+                if (typeof valA === 'string') valA = valA.toLowerCase();
+                if (typeof valB === 'string') valB = valB.toLowerCase();
+
+                if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return sortableUsers;
+    }, [users, sortConfig]);
+
+    const requestSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const getSortIcon = (key) => {
+        if (sortConfig.key !== key) return <span style={{opacity:0.3, fontSize:'0.8em', marginLeft:'5px'}}>↕</span>;
+        return <span style={{fontSize:'0.8em', marginLeft:'5px'}}>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
+    };
 
     // --- HELPER: Calculate Paid Through Date ---
     const calculatePaidThrough = (user) => {
@@ -94,7 +140,6 @@ const Users = () => {
         } catch (e) { alert('Bulk update failed.'); }
     };
 
-    // --- NEW: BULK DELETE ---
     const handleBulkDelete = async () => {
         if (!window.confirm(`PERMANENTLY DELETE ${selectedIds.length} users? This cannot be undone.`)) return;
         try {
@@ -177,18 +222,18 @@ const Users = () => {
                     <thead>
                         <tr>
                             <th style={{width: '40px'}}><input type="checkbox" onChange={handleSelectAll} checked={users.length > 0 && selectedIds.length === users.length} /></th>
-                            <th>Username</th>
-                            <th>Full Name</th>
-                            <th>Email</th>
-                            <th>Frequency</th>
-                            <th>Status</th>
-                            <th>Last Paid</th>
+                            <th onClick={() => requestSort('username')} style={{cursor:'pointer', userSelect:'none'}}>Username {getSortIcon('username')}</th>
+                            <th onClick={() => requestSort('full_name')} style={{cursor:'pointer', userSelect:'none'}}>Full Name {getSortIcon('full_name')}</th>
+                            <th onClick={() => requestSort('email')} style={{cursor:'pointer', userSelect:'none'}}>Email {getSortIcon('email')}</th>
+                            <th onClick={() => requestSort('payment_freq')} style={{cursor:'pointer', userSelect:'none'}}>Frequency {getSortIcon('payment_freq')}</th>
+                            <th onClick={() => requestSort('status')} style={{cursor:'pointer', userSelect:'none'}}>Status {getSortIcon('status')}</th>
+                            <th onClick={() => requestSort('last_paid')} style={{cursor:'pointer', userSelect:'none'}}>Last Paid {getSortIcon('last_paid')}</th>
                             <th>Paid Thru</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {users.map(u => (
+                        {sortedUsers.map(u => (
                             <tr key={u.id} style={{backgroundColor: selectedIds.includes(u.id) ? 'rgba(56, 189, 248, 0.1)' : 'transparent'}}>
                                 <td style={{textAlign: 'center'}}><input type="checkbox" checked={selectedIds.includes(u.id)} onChange={() => handleSelectRow(u.id)} /></td>
                                 <td style={{fontWeight:'bold'}}>{u.username}</td>
