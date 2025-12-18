@@ -33,6 +33,24 @@ def bulk_update():
     save_users(users)
     return jsonify({'message': f'Updated {count} users'})
 
+# --- NEW: BULK DELETE ---
+@users_bp.route('/bulk/delete', methods=['POST'])
+def bulk_delete():
+    data = request.json
+    ids = data.get('ids', [])
+    if not ids:
+        return jsonify({'message': 'No IDs provided'}), 400
+        
+    users = load_users()
+    initial_count = len(users)
+    # Keep users whose ID is NOT in the deletion list
+    users = [u for u in users if u['id'] not in ids]
+    
+    if len(users) < initial_count:
+        save_users(users)
+        return jsonify({'message': f'Deleted {initial_count - len(users)} users'})
+    return jsonify({'message': 'No users deleted'})
+
 @users_bp.route('/<int:user_id>/match_payment', methods=['POST'])
 def match_payment(user_id):
     data = request.json
@@ -70,12 +88,9 @@ def unmap_payment():
     save_data('payment_logs', logs)
     return jsonify({'message': 'Payment unmapped'})
 
-# This calls the improved Sync logic
 @users_bp.route('/import/plex', methods=['POST'])
 def import_plex():
     stats = fetch_all_plex_users()
-    
-    # Check for Error status string
     if "status" in stats and str(stats["status"]).startswith("Error"):
         return jsonify({'message': stats["status"]}), 500
         

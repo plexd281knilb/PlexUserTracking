@@ -94,6 +94,16 @@ const Users = () => {
         } catch (e) { alert('Bulk update failed.'); }
     };
 
+    // --- NEW: BULK DELETE ---
+    const handleBulkDelete = async () => {
+        if (!window.confirm(`PERMANENTLY DELETE ${selectedIds.length} users? This cannot be undone.`)) return;
+        try {
+            await apiPost('/users/bulk/delete', { ids: selectedIds }, localStorage.getItem('admin_token'));
+            setSelectedIds([]); 
+            fetchData(); 
+        } catch (e) { alert('Bulk delete failed.'); }
+    };
+
     const handleSaveUser = async (e) => {
         e.preventDefault();
         await apiPut(`/users/${editUser.id}`, editUser, localStorage.getItem('admin_token'));
@@ -152,10 +162,13 @@ const Users = () => {
             {selectedIds.length > 0 && (
                 <div className="card" style={{backgroundColor: '#334155', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px', borderLeft: '4px solid #38bdf8'}}>
                     <span style={{fontWeight: 'bold', color: 'white'}}>{selectedIds.length} Selected</span>
-                    <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#eab308', color: 'black'}} onClick={() => handleBulkUpdate({payment_freq: 'Exempt'})}>Set Exempt</button>
-                    <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#64748b'}} onClick={() => handleBulkUpdate({payment_freq: 'Monthly'})}>Set Monthly</button>
-                    <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#8b5cf6'}} onClick={() => handleBulkUpdate({payment_freq: 'Yearly'})}>Set Yearly</button>
-                    <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#ef4444'}} onClick={() => handleBulkUpdate({status: 'Disabled'})}>Disable All</button>
+                    <div className="flex" style={{gap: '10px', flexWrap:'wrap'}}>
+                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#eab308', color: 'black'}} onClick={() => handleBulkUpdate({payment_freq: 'Exempt'})}>Set Exempt</button>
+                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#64748b'}} onClick={() => handleBulkUpdate({payment_freq: 'Monthly'})}>Set Monthly</button>
+                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#8b5cf6'}} onClick={() => handleBulkUpdate({payment_freq: 'Yearly'})}>Set Yearly</button>
+                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#ef4444'}} onClick={() => handleBulkUpdate({status: 'Disabled'})}>Disable All</button>
+                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#b91c1c'}} onClick={handleBulkDelete}>Delete Selected</button>
+                    </div>
                 </div>
             )}
 

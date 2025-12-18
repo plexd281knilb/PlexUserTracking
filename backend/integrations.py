@@ -67,7 +67,7 @@ def fetch_all_plex_users():
     current_db_users = load_users()
     
     if not servers:
-        return {"status": "Error: No Plex Servers configured in Settings"}
+        return {"status": "Error: No Plex Servers configured"}
 
     active_plex_friends = {} 
     successful_connections = 0
@@ -83,7 +83,6 @@ def fetch_all_plex_users():
             
         try:
             headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
-            # Fetch friends list from Plex.tv
             r = requests.get('https://plex.tv/api/users', headers=headers, timeout=10)
             
             if r.status_code == 200:
@@ -93,24 +92,21 @@ def fetch_all_plex_users():
                 for u in root.findall('User'):
                     email = u.get('email', '').lower().strip()
                     username = u.get('username', '').strip()
-                    # We prioritize email as the unique key, fallback to lowercase username
                     key = email if email else username.lower()
                     
                     if key:
                         active_plex_friends[key] = { "username": username, "email": email }
                         count_for_server += 1
+                        # DEBUG: Print found users
+                        print(f"DEBUG: Found Plex User: {username} ({email})")
                 print(f"Server {server.get('name')}: Found {count_for_server} friends.")
             else:
-                connection_errors.append(f"Server {server.get('name')} returned {r.status_code}")
                 print(f"Server {server.get('name')} failed: {r.status_code}")
         except Exception as e:
-            connection_errors.append(f"Server {server.get('name')} error: {str(e)}")
             print(f"Server {server.get('name')} exception: {e}")
 
-    # SAFETY CHECK: If we couldn't reach ANY server, abort to prevent wiping the DB
     if successful_connections == 0:
-        error_msg = "; ".join(connection_errors)
-        return {"status": f"Error: Could not connect to any Plex server. Details: {error_msg}"}
+        return {"status": "Error: Could not connect to any Plex server"}
 
     # 2. Rebuild User List (Strict Sync)
     final_users_list = []
@@ -118,37 +114,30 @@ def fetch_all_plex_users():
     added_count = 0
     removed_count = 0
     
-    # A. Filter Existing Users
+    # A. Filter Existing
     for db_user in current_db_users:
         u_email = db_user.get('email', '').lower().strip()
-        u_name = db_user.get('username', '').strip() # Keep original case for display, but lower for check
-        u_name_lower = u_name.lower()
+        u_name_lower = db_user.get('username', '').strip().lower()
         
         found_key = None
-        # strict match on email OR username
         if u_email and u_email in active_plex_friends: found_key = u_email
         elif u_name_lower and u_name_lower in active_plex_friends: found_key = u_name_lower
             
         if found_key:
-            # User confirmed in Plex -> Update and Keep
             data = active_plex_friends[found_key]
             if data['username']: db_user['username'] = data['username']
             if data['email']: db_user['email'] = data['email']
             final_users_list.append(db_user)
             processed_keys.add(found_key)
         else:
-            # User NOT in Plex -> Remove
-            print(f"Removing user not in Plex: {u_name} ({u_email})")
+            print(f"DEBUG: Removing User from DB: {db_user.get('username')} (Not found in Plex)")
             removed_count += 1
             
-    # B. Add New Users
+    # B. Add New
     max_id = max([u.get('id', 0) for u in final_users_list] + [0])
-    
     for key, p_data in active_plex_friends.items():
         if key not in processed_keys:
-            # Double check duplicates by alternate properties just in case
             is_dup = any(u for u in final_users_list if u['email'] == p_data['email'] or u['username'].lower() == p_data['username'].lower())
-            
             if not is_dup:
                 max_id += 1
                 final_users_list.append({
@@ -161,10 +150,9 @@ def fetch_all_plex_users():
                     "last_paid": "Never"
                 })
                 added_count += 1
-                print(f"Adding new user: {p_data['username']}")
             
     save_users(final_users_list)
-    print(f"Sync Complete: +{added_count} / -{removed_count}")
+    print(f"Sync Result: +{added_count} / -{removed_count}")
     return {"added": added_count, "removed": removed_count}
 
 # --- PAYMENT FETCHERS ---
