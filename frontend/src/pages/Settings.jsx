@@ -6,28 +6,22 @@ const Settings = () => {
         // Financials
         fee_monthly: "0.00",
         fee_yearly: "0.00",
-        // Automation
-        plex_auto_ban: true,
-        plex_auto_invite: true,
         scan_interval_min: 60,
         // Search Terms
         venmo_search_term: 'paid you',
         paypal_search_term: 'sent you',
         zelle_search_term: 'received',
-        // Access Control
-        default_library_ids: [],
         // SMTP
         smtp_host: "", smtp_port: 465, smtp_user: "", smtp_pass: ""
     });
     
     const [servers, setServers] = useState([]);
-    const [libraries, setLibraries] = useState({});
     const [loading, setLoading] = useState(true);
     
     // Server Form & Testing
     const [serverForm, setServerForm] = useState({ id: null, name: '', token: '', url: '' });
     const [isEditingServer, setIsEditingServer] = useState(false);
-    const [testResults, setTestResults] = useState({}); // { serverId: "OK" }
+    const [testResults, setTestResults] = useState({});
 
     useEffect(() => {
         const loadData = async () => {
@@ -37,20 +31,8 @@ const Settings = () => {
                     apiGet('/settings/servers')
                 ]);
                 setSettings(prev => ({ ...prev, ...sets }));
-                
-                // Filter out empty/ghost servers
                 const plexServers = (srvs.plex || []).filter(s => s.name && s.name.trim() !== "");
                 setServers(plexServers);
-
-                // Load Libraries
-                const libMap = {};
-                await Promise.all(plexServers.map(async (server) => {
-                    try {
-                        const res = await apiPost('/settings/plex/libraries', { token: server.token, url: server.url }, localStorage.getItem('admin_token'));
-                        if (res.libraries) libMap[server.name] = res.libraries;
-                    } catch (e) {}
-                }));
-                setLibraries(libMap);
             } catch (e) { console.error(e); }
             setLoading(false);
         };
@@ -64,7 +46,7 @@ const Settings = () => {
         } catch (e) { alert('Save failed'); }
     };
 
-    // --- PLEX ACTIONS ---
+    // --- PLEX SERVERS (For Import Only) ---
     const handleSaveServer = async () => {
         try {
             if (isEditingServer) {
@@ -90,13 +72,6 @@ const Settings = () => {
         } catch (e) {
             setTestResults(prev => ({ ...prev, [server.id]: '❌ Error' }));
         }
-    };
-
-    const handleLibraryCheckbox = (serverName, libId) => {
-        const uniqueId = `${serverName}__${libId}`;
-        const current = settings.default_library_ids || [];
-        let updated = current.includes(uniqueId) ? current.filter(id => id !== uniqueId) : [...current, uniqueId];
-        setSettings({ ...settings, default_library_ids: updated });
     };
 
     if (loading) return <div>Loading...</div>;
@@ -132,7 +107,7 @@ const Settings = () => {
 
             {/* 2. PLEX SERVERS */}
             <div className="card" style={{marginBottom:'20px'}}>
-                <h3>Plex Servers</h3>
+                <h3>Plex Servers (For Import Only)</h3>
                 <table className="table" style={{marginBottom:'15px'}}>
                     <thead><tr><th>Name</th><th>URL</th><th>Actions</th></tr></thead>
                     <tbody>
@@ -167,35 +142,10 @@ const Settings = () => {
                 </div>
             </div>
 
-            {/* 3. ACCESS CONTROL */}
-            <div className="card" style={{marginBottom:'20px'}}>
-                <div className="flex" style={{justifyContent:'space-between', marginBottom:'15px'}}>
-                    <h3>Access Control</h3>
-                    <div className="flex" style={{gap:'15px'}}>
-                        <label style={{display:'flex', alignItems:'center', gap:'5px'}}><input type="checkbox" checked={settings.plex_auto_ban} onChange={e=>setSettings({...settings, plex_auto_ban: e.target.checked})} /><span className="small">Auto-Ban</span></label>
-                        <label style={{display:'flex', alignItems:'center', gap:'5px'}}><input type="checkbox" checked={settings.plex_auto_invite} onChange={e=>setSettings({...settings, plex_auto_invite: e.target.checked})} /><span className="small">Auto-Invite</span></label>
-                    </div>
-                </div>
-                {servers.map(server => (
-                    <div key={server.id} style={{marginBottom: '10px', padding: '10px', border: '1px solid var(--border)', borderRadius: '8px'}}>
-                        <strong>{server.name}</strong>
-                        {libraries[server.name] ? (
-                            <div style={{marginTop:'5px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'5px'}}>
-                                {libraries[server.name].map(lib => (
-                                    <label key={`${server.name}__${lib.id}`} style={{display:'flex', alignItems:'center', gap:'8px', cursor:'pointer'}}>
-                                        <input type="checkbox" checked={settings.default_library_ids.includes(`${server.name}__${lib.id}`)} onChange={() => handleLibraryCheckbox(server.name, lib.id)} />
-                                        <span style={{fontSize:'0.85rem'}}>{lib.title}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        ) : <div className="small" style={{color:'orange'}}>Loading libraries...</div>}
-                    </div>
-                ))}
-            </div>
-
-            {/* 4. NOTIFICATIONS */}
+            {/* 3. NOTIFICATIONS */}
             <div className="card" style={{marginBottom:'20px'}}>
                 <h3>Notifications (SMTP)</h3>
+                <p className="small" style={{color:'var(--text-muted)'}}>Required for automated email reminders.</p>
                 <div className="flex" style={{gap:'10px', marginBottom:'10px'}}>
                     <div style={{flex:2}}><label className="small">Host</label><input className="input" placeholder="smtp.gmail.com" value={settings.smtp_host} onChange={e=>setSettings({...settings, smtp_host: e.target.value})} /></div>
                     <div style={{flex:1}}><label className="small">Port</label><input className="input" value={settings.smtp_port} onChange={e=>setSettings({...settings, smtp_port: e.target.value})} /></div>

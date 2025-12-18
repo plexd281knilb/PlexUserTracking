@@ -1,21 +1,20 @@
 from datetime import datetime, timedelta
 from database import load_users, save_users, load_settings
-from integrations import modify_plex_access, send_notification_email
+from integrations import send_notification_email
 import calendar
 
 def check_automation():
-    print("--- RUNNING AUTOMATION CHECK ---")
+    print("--- RUNNING EMAIL AUTOMATION ---")
     users = load_users()
     settings = load_settings()
     
     monthly_fee = float(settings.get('fee_monthly', 0))
     yearly_fee = float(settings.get('fee_yearly', 0))
     
-    today = datetime.now().date() # Compare dates only
+    today = datetime.now().date()
     updated = False
 
     for user in users:
-        # Skip Exempt or already Disabled
         if user.get('payment_freq') == 'Exempt': continue
         if user.get('status') == 'Disabled': continue
         if not user.get('last_paid') or user['last_paid'] == 'Never': continue
@@ -44,7 +43,7 @@ def check_automation():
             disable_date = paid_thru_date + timedelta(days=1)
             warning_date = paid_thru_date - timedelta(days=3)
 
-            # --- AUTOMATION LOGIC ---
+            # --- EMAIL AUTOMATION ---
             
             # 1. Warning Email (3 days before)
             if today == warning_date:
@@ -53,17 +52,14 @@ def check_automation():
                 body = f"Hi {user.get('full_name', 'User')},\n\nYour Plex subscription is set to expire on {paid_thru_date}. Please renew to maintain access.\n\nThanks!"
                 send_notification_email(user['email'], subject, body)
 
-            # 2. Disable & Revoke (Day after expiry)
+            # 2. Disable & Notify (Day after expiry)
             if today >= disable_date:
-                print(f"User {user['username']} expired on {paid_thru_date}. Disabling...")
+                print(f"User {user['username']} expired on {paid_thru_date}. Marking Disabled and emailing...")
                 user['status'] = 'Disabled'
-                
-                # Revoke Plex Access
-                modify_plex_access(user, enable=False) 
                 
                 # Send "Account Disabled" Email
                 subject = "Plex Access Disabled"
-                body = f"Hi {user.get('full_name', 'User')},\n\nYour subscription expired on {paid_thru_date} and access has been revoked. Please make a payment to reactivate."
+                body = f"Hi {user.get('full_name', 'User')},\n\nYour subscription expired on {paid_thru_date}. Your account has been marked as Disabled.\nPlease make a payment to reactivate."
                 send_notification_email(user['email'], subject, body)
                 
                 updated = True

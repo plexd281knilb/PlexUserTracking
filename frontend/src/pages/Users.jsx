@@ -28,13 +28,11 @@ const Users = () => {
 
     useEffect(() => { fetchData(); }, []);
 
-    // --- HELPER: Calculate Paid Through Date (Calendar Based) ---
+    // --- HELPER: Calculate Paid Through Date ---
     const calculatePaidThrough = (user) => {
         if (user.payment_freq === 'Exempt') return <span style={{color:'#10b981', fontWeight:'bold'}}>Forever</span>;
         
-        // Default for Active/Pending users with no history: 12/31/2025
         if ((!user.last_paid || user.last_paid === 'Never')) {
-            // FIXED: Now includes 'Pending' users in the default date
             if (user.status === 'Active' || user.status === 'Pending') {
                 return <span style={{color:'#f59e0b'}}>2025-12-31 (Default)</span>;
             }
@@ -51,23 +49,20 @@ const Users = () => {
         let endDate = new Date(paidDate);
         let isValid = false;
 
-        // --- YEARLY LOGIC: Calendar Year + 1 ---
         if (user.payment_freq === 'Yearly' && yearlyFee > 0) {
             const yearsPaid = Math.floor(amountPaid / yearlyFee);
             if (yearsPaid > 0) {
                 isValid = true;
                 endDate.setFullYear(endDate.getFullYear() + yearsPaid);
-                endDate.setMonth(11); // Dec
-                endDate.setDate(31);  // 31st
+                endDate.setMonth(11); 
+                endDate.setDate(31);  
             }
         } 
-        // --- MONTHLY LOGIC: Calendar Month + 1 ---
         else if (user.payment_freq === 'Monthly' && monthlyFee > 0) {
             const monthsPaid = Math.floor(amountPaid / monthlyFee);
             if (monthsPaid > 0) {
                 isValid = true;
                 endDate.setMonth(endDate.getMonth() + monthsPaid);
-                // Snap to End of Month
                 endDate = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0); 
             }
         }
@@ -76,10 +71,7 @@ const Users = () => {
 
         const today = new Date();
         const isExpired = endDate < today;
-        const color = isExpired ? '#ef4444' : '#10b981';
-
-        const dateStr = endDate.toISOString().split('T')[0];
-        return <span style={{color, fontWeight:'bold'}}>{dateStr}</span>;
+        return <span style={{color: isExpired ? '#ef4444' : '#10b981', fontWeight:'bold'}}>{endDate.toISOString().split('T')[0]}</span>;
     };
 
     // --- HANDLERS ---
@@ -125,14 +117,6 @@ const Users = () => {
         fetchData();
     };
 
-    const toggleStatus = async (user) => {
-        if (user.status === 'Active' && user.payment_freq === 'Exempt') { alert("User is Exempt."); return; }
-        const newStatus = user.status === 'Active' ? 'Disabled' : 'Active';
-        if(!window.confirm(`Mark ${user.username} as ${newStatus}?`)) return;
-        await apiPut(`/users/${user.id}`, { ...user, status: newStatus }, localStorage.getItem('admin_token'));
-        fetchData();
-    };
-
     const handleImport = async (source) => {
         setLoading(true);
         try {
@@ -161,7 +145,7 @@ const Users = () => {
                 <h1>User Management</h1>
                 <div className="flex" style={{gap: '10px'}}>
                     <button className="button" style={{backgroundColor: '#64748b'}} onClick={handleRemap}>🔄 Re-Map Payments</button>
-                    <button className="button" onClick={() => handleImport('plex')}>Import Plex</button>
+                    <button className="button" onClick={() => handleImport('plex')}>Import Plex Users</button>
                 </div>
             </div>
 
@@ -203,7 +187,6 @@ const Users = () => {
                                     <div className="flex" style={{gap:'5px'}}>
                                         <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem'}} onClick={() => setEditUser(u)}>Edit</button>
                                         <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: '#f59e0b'}} onClick={() => setMatchUser(u)}>Match</button>
-                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: u.status==='Active' ? '#ef4444' : '#10b981', opacity: u.payment_freq === 'Exempt' && u.status === 'Active' ? 0.5 : 1}} onClick={() => toggleStatus(u)}>{u.status==='Active' ? 'Disable' : 'Enable'}</button>
                                     </div>
                                 </td>
                             </tr>
@@ -219,15 +202,25 @@ const Users = () => {
                         <form onSubmit={handleSaveUser} style={{display:'grid', gap:'15px'}}>
                             <div><label className="small">Full Name</label><input className="input" value={editUser.full_name || ''} onChange={e=>setEditUser({...editUser, full_name: e.target.value})} /></div>
                             <div><label className="small">Email</label><input className="input" value={editUser.email || ''} onChange={e=>setEditUser({...editUser, email: e.target.value})} /></div>
-                            <div><label className="small">Last Paid</label><input className="input" type="date" value={editUser.last_paid || ''} onChange={e=>setEditUser({...editUser, last_paid: e.target.value})} /></div>
-                            <div>
-                                <label className="small">Frequency</label>
-                                <select className="input" value={editUser.payment_freq || 'Exempt'} onChange={e=>setEditUser({...editUser, payment_freq: e.target.value})}>
-                                    <option value="Exempt">Exempt</option>
-                                    <option value="Monthly">Monthly</option>
-                                    <option value="Yearly">Yearly</option>
-                                </select>
+                            <div className="flex" style={{gap:'10px'}}>
+                                <div style={{flex:1}}>
+                                    <label className="small">Status</label>
+                                    <select className="input" value={editUser.status || 'Pending'} onChange={e=>setEditUser({...editUser, status: e.target.value})}>
+                                        <option value="Active">Active</option>
+                                        <option value="Disabled">Disabled</option>
+                                        <option value="Pending">Pending</option>
+                                    </select>
+                                </div>
+                                <div style={{flex:1}}>
+                                    <label className="small">Frequency</label>
+                                    <select className="input" value={editUser.payment_freq || 'Exempt'} onChange={e=>setEditUser({...editUser, payment_freq: e.target.value})}>
+                                        <option value="Exempt">Exempt</option>
+                                        <option value="Monthly">Monthly</option>
+                                        <option value="Yearly">Yearly</option>
+                                    </select>
+                                </div>
                             </div>
+                            <div><label className="small">Last Paid</label><input className="input" type="date" value={editUser.last_paid || ''} onChange={e=>setEditUser({...editUser, last_paid: e.target.value})} /></div>
                             <div className="flex" style={{justifyContent:'flex-end'}}>
                                 <button type="button" className="button" style={{backgroundColor:'#64748b', marginRight:'10px'}} onClick={()=>setEditUser(null)}>Cancel</button>
                                 <button type="submit" className="button">Save</button>
