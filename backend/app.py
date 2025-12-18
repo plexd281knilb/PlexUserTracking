@@ -35,7 +35,7 @@ except Exception as e:
     print(f"Scheduler failed to start: {e}")
 
 # --- 3. REGISTER BLUEPRINTS ---
-# Ensure these files are present in backend/routes/
+# Ensure all these files exist in backend/routes/
 from routes.users import users_bp
 from routes.settings import settings_bp
 from routes.dashboard import dashboard_bp
@@ -56,6 +56,7 @@ app.register_blueprint(upcoming_bp)
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
+    # API calls should return 404 JSON, not HTML, if missing
     if path.startswith('api/'):
         return jsonify(error="API endpoint not found"), 404
 

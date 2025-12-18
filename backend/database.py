@@ -45,7 +45,6 @@ def save_users(users):
 def load_payment_logs():
     return load_data('payment_logs', [])
 
-# CRITICAL FIX: Added missing function causing the crash
 def save_payment_log(log_entry):
     if isinstance(log_entry, list):
         save_data('payment_logs', log_entry)
@@ -69,7 +68,6 @@ def load_expenses():
 def load_payment_accounts(type_filter=None):
     accounts = load_data('payment_accounts', [])
     if type_filter:
-        # Case-insensitive match (Fixes scanners disappearing)
         tf = type_filter.lower()
         return [acc for acc in accounts if acc.get('type', '').lower() == tf]
     return accounts
@@ -78,9 +76,6 @@ def save_payment_accounts(type_key, updated_list):
     all_accounts = load_data('payment_accounts', [])
     tf = type_key.lower()
     others = [acc for acc in all_accounts if acc.get('type', '').lower() != tf]
-    
-    # Ensure type is set on new entries
     for acc in updated_list:
         acc['type'] = type_key 
-    
     save_data('payment_accounts', others + updated_list)
