@@ -4,7 +4,7 @@ from integrations import get_plex_libraries, test_plex_connection, test_email_co
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/api/settings')
 
-# --- GENERAL ---
+# --- GENERAL SETTINGS ---
 @settings_bp.route('', methods=['GET'])
 def get_settings():
     return jsonify(load_settings())
@@ -17,7 +17,7 @@ def update_settings():
     save_settings(current)
     return jsonify({'message': 'Settings saved successfully'})
 
-# --- PLEX SERVERS ---
+# --- PLEX SERVER MANAGEMENT ---
 @settings_bp.route('/servers', methods=['GET'])
 def get_servers():
     return jsonify(load_servers())
@@ -57,7 +57,7 @@ def delete_plex_server(server_id):
         save_data('servers', servers)
     return jsonify({'message': 'Server removed'})
 
-# --- PAYMENT ACCOUNTS (Settings Page) ---
+# --- PAYMENT SCANNERS (Generic Access for Settings Page) ---
 @settings_bp.route('/payment_accounts', methods=['GET'])
 def get_payment_accounts():
     return jsonify(load_data('payment_accounts', []))
@@ -101,7 +101,8 @@ def test_email_route():
 def list_libraries():
     data = request.json
     res = get_plex_libraries(data.get('token'), data.get('url'))
-    if "error" in res: return jsonify(res), 400
+    if "error" in res:
+        return jsonify(res), 400
     return jsonify(res)
 
 @settings_bp.route('/test/plex', methods=['POST'])

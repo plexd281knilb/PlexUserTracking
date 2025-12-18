@@ -4,7 +4,7 @@ from database import load_users, load_payment_logs, save_users, save_data, load_
 
 payments_bp = Blueprint('payments', __name__, url_prefix='/api/payments')
 
-# --- 1. SCANNER ACTIONS (Trigger Fetch) ---
+# --- 1. SCANNER TRIGGERS (Matches Frontend /scan/...) ---
 @payments_bp.route('/scan/venmo', methods=['POST'])
 def scan_venmo():
     return jsonify(fetch_venmo_payments())
@@ -17,16 +17,16 @@ def scan_paypal():
 def scan_zelle():
     return jsonify(fetch_zelle_payments())
 
-# --- 2. ACCOUNT MANAGEMENT (For Venmo.jsx, etc) ---
+# --- 2. ACCOUNT MANAGEMENT (Matches Frontend /accounts/...) ---
 @payments_bp.route('/accounts/<string:service_type>', methods=['GET'])
 def get_service_accounts(service_type):
-    # Uses the case-insensitive loader from database.py
+    # This calls the case-insensitive loader we fixed in database.py
     return jsonify(load_payment_accounts(service_type))
 
 @payments_bp.route('/accounts/<string:service_type>', methods=['POST'])
 def add_service_account(service_type):
     data = request.json
-    # Normalize type names for DB (Venmo, PayPal, Zelle)
+    # Normalize the type field for the database
     sType = service_type.lower()
     if sType == 'venmo': data['type'] = 'Venmo'
     elif sType == 'zelle': data['type'] = 'Zelle'
@@ -34,6 +34,7 @@ def add_service_account(service_type):
     else: data['type'] = service_type.capitalize()
 
     accounts = load_data('payment_accounts', [])
+    # Safe ID generation
     new_id = max([a.get('id', 0) for a in accounts] + [0]) + 1
     data['id'] = new_id
     accounts.append(data)
@@ -66,8 +67,10 @@ def remap_payments():
     count = 0
     for log in logs:
         if log.get('status') != 'Matched':
+            # Re-run match logic without saving every single time
             if process_payment(users, log['sender'], log['amount'], log['date'], log['service'], existing_logs=logs, save_db=False):
                 count += 1
+    
     save_users(users)
     save_data('payment_logs', logs)
     return jsonify({'message': f'Remapped {count} payments'})
@@ -78,6 +81,6 @@ def manual_add():
     data = request.json
     users = load_users()
     logs = load_payment_logs()
-    # Process directly adds to logs
+    # Process directly adds to logs and attempts to match
     process_payment(users, data['sender'], data['amount'], data['date'], data['service'], existing_logs=logs, save_db=True)
     return jsonify({'message': 'Manual payment processed'})

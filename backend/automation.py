@@ -11,7 +11,6 @@ def check_automation():
     monthly_fee = float(settings.get('fee_monthly', 0))
     yearly_fee = float(settings.get('fee_yearly', 0))
     
-    # Notify Days Defaults
     notify_monthly = int(settings.get('notify_days_monthly', 3))
     notify_yearly = int(settings.get('notify_days_yearly', 7))
     
