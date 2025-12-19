@@ -29,15 +29,18 @@ const Users = () => {
 
     useEffect(() => { fetchData(); }, []);
 
-    // --- HELPER: Get Date Object for Sorting ---
+    // --- HELPER: Get Date Object for Sorting/Display ---
     const getPaidDate = (user) => {
-        if (user.payment_freq === 'Exempt') return new Date(9999, 11, 31); // Sorts as far future
+        if (user.payment_freq === 'Exempt') return new Date(9999, 11, 31);
         
-        if ((!user.last_paid || user.last_paid === 'Never')) {
+        // Default for Never Paid or Active/Pending
+        const defaultDate = new Date(2025, 11, 31);
+
+        if (!user.last_paid || user.last_paid === 'Never') {
             if (user.status === 'Active' || user.status === 'Pending') {
-                return new Date(2025, 11, 31); // Default date
+                return defaultDate;
             }
-            return new Date(0); // 1970 (Sorts as expired/none)
+            return new Date(0);
         }
 
         const paidDate = new Date(user.last_paid);
@@ -57,6 +60,9 @@ const Users = () => {
                 endDate.setFullYear(endDate.getFullYear() + yearsPaid);
                 endDate.setMonth(11); 
                 endDate.setDate(31);  
+            } else {
+                // Partial payment -> Default 2025-12-31
+                return defaultDate;
             }
         } 
         else if (user.payment_freq === 'Monthly' && monthlyFee > 0) {
@@ -65,10 +71,13 @@ const Users = () => {
                 isValid = true;
                 endDate.setMonth(endDate.getMonth() + monthsPaid);
                 endDate = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0); 
+            } else {
+                // Partial payment -> Default 2025-12-31
+                return defaultDate;
             }
         }
 
-        return isValid ? endDate : new Date(0);
+        return isValid ? endDate : defaultDate; // Fallback to default if math fails
     };
 
     // --- HELPER: Render Date Badge ---
@@ -77,21 +86,17 @@ const Users = () => {
         const year = date.getFullYear();
 
         if (year === 9999) return <span style={{color:'#10b981', fontWeight:'bold'}}>Forever</span>;
-        if (year === 1970 || year === 1969) {
-             if (!user.last_paid && (user.status === 'Active' || user.status === 'Pending')) return <span style={{color:'#f59e0b'}}>2025-12-31 (Default)</span>; // Should be caught by getPaidDate logic above but distinct for display
-             return <span style={{color:'#94a3b8'}}>-</span>;
-        }
+        if (year === 1970) return <span style={{color:'#94a3b8'}}>-</span>;
         
-        // Check Partial logic from before (if amount < fee)
-        const amountPaid = parseFloat((user.last_payment_amount || '0').replace(/[^0-9.]/g, ''));
-        const fee = user.payment_freq === 'Yearly' ? parseFloat(settings.fee_yearly || 0) : parseFloat(settings.fee_monthly || 0);
-        if (user.payment_freq !== 'Exempt' && amountPaid < fee && amountPaid > 0) {
-             return <span style={{color:'#f59e0b', fontSize:'0.8em'}}>Partial Payment</span>;
-        }
-
+        // Highlight Default Date (Partial/Never)
+        const isDefault = year === 2025 && date.getMonth() === 11 && date.getDate() === 31;
+        
         const today = new Date();
         const isExpired = date < today;
-        return <span style={{color: isExpired ? '#ef4444' : '#10b981', fontWeight:'bold'}}>{date.toISOString().split('T')[0]}</span>;
+        
+        const color = isExpired ? '#ef4444' : (isDefault ? '#f59e0b' : '#10b981');
+        
+        return <span style={{color: color, fontWeight:'bold'}}>{date.toISOString().split('T')[0]}</span>;
     };
 
     // --- SORTING LOGIC ---
@@ -108,7 +113,6 @@ const Users = () => {
                     valA = a[sortConfig.key];
                     valB = b[sortConfig.key];
                     
-                    // Handle 'last_paid' string sorting
                     if (sortConfig.key === 'last_paid') {
                         if (valA === 'Never' || !valA) valA = '0000-00-00';
                         if (valB === 'Never' || !valB) valB = '0000-00-00';
@@ -125,7 +129,7 @@ const Users = () => {
             });
         }
         return sortableUsers;
-    }, [users, sortConfig, settings]); // Added settings dependency
+    }, [users, sortConfig, settings]);
 
     const requestSort = (key) => {
         let direction = 'asc';

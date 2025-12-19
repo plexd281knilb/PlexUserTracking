@@ -10,10 +10,9 @@ def calculate_expiry(user, settings):
     """
     if user.get('payment_freq') == 'Exempt': return None
     
-    # --- FIX: Handle Default Date for New/Pending Users ---
+    # 1. Handle "Never Paid" -> Default to 2025-12-31
     if not user.get('last_paid') or user['last_paid'] == 'Never': 
         if user.get('status') in ['Active', 'Pending']:
-            # Default to Dec 31, 2025 as requested
             return datetime(2025, 12, 31)
         return None
 
@@ -27,21 +26,27 @@ def calculate_expiry(user, settings):
 
         paid_thru = last_paid
 
+        # 2. Yearly Logic
         if user['payment_freq'] == 'Yearly' and yearly_fee > 0:
             years = int(amount // yearly_fee)
             if years > 0:
                 paid_thru = paid_thru.replace(year=paid_thru.year + years)
-                # Set to end of that year (Dec 31)
                 paid_thru = paid_thru.replace(month=12, day=31)
+            else:
+                # FIX: Partial payment (amount < fee) -> Default to 2025-12-31
+                return datetime(2025, 12, 31)
         
+        # 3. Monthly Logic
         elif user['payment_freq'] == 'Monthly' and monthly_fee > 0:
             months = int(amount // monthly_fee)
             if months > 0:
-                # Add months logic
                 year = paid_thru.year + ((paid_thru.month + months - 1) // 12)
                 month = (paid_thru.month + months - 1) % 12 + 1
                 day = calendar.monthrange(year, month)[1]
                 paid_thru = datetime(year, month, day)
+            else:
+                # FIX: Partial payment -> Default to 2025-12-31
+                return datetime(2025, 12, 31)
 
         return paid_thru
     except Exception as e:
