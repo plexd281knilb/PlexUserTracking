@@ -58,8 +58,25 @@ def send_notification_email(to_email, subject, body):
         server.send_message(msg)
         server.quit()
         return True
-    except:
+    except Exception as e:
+        print(f"Email Send Failed: {e}")
         return False
+
+def test_smtp_connection(host, port, user, password):
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = user
+        msg['To'] = user # Send to self
+        msg['Subject'] = "PlexTracker Test Email"
+        msg.attach(MIMEText("If you are reading this, your SMTP settings are correct!", 'plain'))
+
+        server = smtplib.SMTP_SSL(host, int(port))
+        server.login(user, password)
+        server.send_message(msg)
+        server.quit()
+        return {"status": "success", "message": "Test email sent successfully!"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 # --- SYNC PLEX USERS ---
 def fetch_all_plex_users():
@@ -93,19 +110,14 @@ def fetch_all_plex_users():
                     username = u.get('username', '').strip()
                     email = u.get('email', '').lower().strip()
                     
-                    # 1. Check for Pending Status
                     if u.get('state') == 'pending':
                         print(f"Skipping Pending User: {username or email}")
                         continue
 
-                    # 2. NEW: Check for Library Access (Must have <Server> tags)
-                    # The XML structure lists shared servers as children of the User element.
-                    # If a user has no Server tags, they have no access to any libraries.
                     if not u.findall('Server'):
                         print(f"Skipping User without library access: {username or email}")
                         continue
 
-                    # We prioritize email as the unique key
                     key = email if email else username.lower()
                     
                     if key:
@@ -121,13 +133,11 @@ def fetch_all_plex_users():
     if successful_connections == 0:
         return {"status": "Error: Could not connect to any Plex server"}
 
-    # 2. Rebuild User List (Strict Sync)
     final_users_list = []
     processed_keys = set()
     added_count = 0
     removed_count = 0
     
-    # A. Filter Existing
     for db_user in current_db_users:
         u_email = db_user.get('email', '').lower().strip()
         u_name_lower = db_user.get('username', '').strip().lower()
@@ -146,7 +156,6 @@ def fetch_all_plex_users():
             print(f"Removing User from DB: {db_user.get('username')} (No access or removed)")
             removed_count += 1
             
-    # B. Add New
     max_id = max([u.get('id', 0) for u in final_users_list] + [0])
     for key, p_data in active_plex_friends.items():
         if key not in processed_keys:

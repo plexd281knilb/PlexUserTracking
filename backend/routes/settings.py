@@ -1,6 +1,6 @@
 ﻿from flask import Blueprint, request, jsonify
 from database import load_settings, save_settings, load_servers, save_data
-from integrations import get_plex_libraries, test_plex_connection
+from integrations import get_plex_libraries, test_plex_connection, test_email_connection, test_smtp_connection
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/api/settings')
 
@@ -57,7 +57,7 @@ def delete_plex_server(server_id):
         save_data('servers', servers)
     return jsonify({'message': 'Server removed'})
 
-# --- UTILS ---
+# --- TEST UTILS ---
 @settings_bp.route('/plex/libraries', methods=['POST'])
 def list_libraries():
     data = request.json
@@ -70,4 +70,16 @@ def list_libraries():
 def test_connection():
     data = request.json
     res = test_plex_connection(data.get('token'), data.get('url'))
+    return jsonify(res)
+
+@settings_bp.route('/test/email', methods=['POST'])
+def test_email_scanner():
+    data = request.json
+    res = test_email_connection(data.get('imap_server'), data.get('port'), data.get('email'), data.get('password'))
+    return jsonify(res)
+
+@settings_bp.route('/test/smtp', methods=['POST'])
+def test_smtp_send():
+    data = request.json
+    res = test_smtp_connection(data.get('smtp_host'), data.get('smtp_port'), data.get('smtp_user'), data.get('smtp_pass'))
     return jsonify(res)

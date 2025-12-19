@@ -10,7 +10,7 @@ def calculate_expiry(user, settings):
     """
     if user.get('payment_freq') == 'Exempt': return None
     
-    # 1. Handle "Never Paid" -> Default to 2025-12-31
+    # Handle "Never Paid" -> Default to 2025-12-31
     if not user.get('last_paid') or user['last_paid'] == 'Never': 
         if user.get('status') in ['Active', 'Pending']:
             return datetime(2025, 12, 31)
@@ -26,17 +26,16 @@ def calculate_expiry(user, settings):
 
         paid_thru = last_paid
 
-        # 2. Yearly Logic
+        # Yearly Logic
         if user['payment_freq'] == 'Yearly' and yearly_fee > 0:
             years = int(amount // yearly_fee)
             if years > 0:
                 paid_thru = paid_thru.replace(year=paid_thru.year + years)
                 paid_thru = paid_thru.replace(month=12, day=31)
             else:
-                # FIX: Partial payment (amount < fee) -> Default to 2025-12-31
-                return datetime(2025, 12, 31)
+                return datetime(2025, 12, 31) # Partial
         
-        # 3. Monthly Logic
+        # Monthly Logic
         elif user['payment_freq'] == 'Monthly' and monthly_fee > 0:
             months = int(amount // monthly_fee)
             if months > 0:
@@ -45,8 +44,7 @@ def calculate_expiry(user, settings):
                 day = calendar.monthrange(year, month)[1]
                 paid_thru = datetime(year, month, day)
             else:
-                # FIX: Partial payment -> Default to 2025-12-31
-                return datetime(2025, 12, 31)
+                return datetime(2025, 12, 31) # Partial
 
         return paid_thru
     except Exception as e:
@@ -78,7 +76,7 @@ def check_automation():
         warning_date = paid_thru_date - timedelta(days=days_before)
         disable_date = paid_thru_date + timedelta(days=1)
 
-        # 1. SEND REMINDER
+        # 1. SEND REMINDER TO USER
         if today == warning_date and user.get('email'):
             print(f"Sending reminder to {user['username']}")
             prefix = 'email_monthly' if user['payment_freq'] == 'Monthly' else 'email_yearly'
@@ -91,16 +89,25 @@ def check_automation():
             
             send_notification_email(user['email'], subject, body)
 
-        # 2. AUTO-DISABLE
+        # 2. AUTO-DISABLE & NOTIFY ADMIN
         if today >= disable_date and user['status'] != 'Disabled':
             print(f"Disabling user {user['username']}")
             user['status'] = 'Disabled'
             updated = True
             
+            # Notify User
             if user.get('email'):
                 subject = "Account Disabled"
                 body = f"Hi {user.get('full_name', 'User')},\n\nYour subscription expired on {paid_thru_date}. Your account has been marked as Disabled."
                 send_notification_email(user['email'], subject, body)
+                
+            # Notify Admin (NEW)
+            admin_email = settings.get('smtp_user')
+            if admin_email:
+                print(f"Notifying Admin about {user['username']}")
+                admin_subject = f"ACTION REQUIRED: User Expired ({user['username']})"
+                admin_body = f"User: {user['username']}\nEmail: {user.get('email')}\nExpired On: {paid_thru_date}\n\nStatus has been set to Disabled in Tracker. Please remove their access in Plex."
+                send_notification_email(admin_email, admin_subject, admin_body)
 
     if updated:
         save_users(users)
