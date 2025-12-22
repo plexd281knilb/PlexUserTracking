@@ -17,7 +17,7 @@ def update_settings():
     save_settings(current)
     return jsonify({'message': 'Settings saved successfully'})
 
-# --- PAYMENT SCANNERS (Restored) ---
+# --- PAYMENT SCANNERS ---
 @settings_bp.route('/payment_accounts', methods=['GET'])
 def get_payment_accounts():
     accounts = load_data('payment_accounts', [])
@@ -49,7 +49,6 @@ def update_payment_account(acc_id):
     for acc in accounts:
         if acc['id'] == acc_id:
             acc.update(data)
-            # Normalize Type
             sType = data.get('type', '').lower()
             if sType == 'venmo': acc['type'] = 'Venmo'
             elif sType == 'zelle': acc['type'] = 'Zelle'
@@ -66,7 +65,7 @@ def delete_payment_account(acc_id):
     save_data('payment_accounts', accounts)
     return jsonify({'message': 'Scanner deleted'})
 
-# --- PLEX SERVER MANAGEMENT ---
+# --- PLEX SERVERS ---
 @settings_bp.route('/servers', methods=['GET'])
 def get_servers():
     return jsonify(load_servers())

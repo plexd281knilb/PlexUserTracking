@@ -3,16 +3,25 @@ import { apiGet, apiPost, apiPut, apiDelete } from 'api';
 
 const Settings = () => {
     const [settings, setSettings] = useState({
-        fee_monthly: "0.00", fee_yearly: "0.00", scan_interval_min: 60,
-        notify_days_monthly: 3, notify_days_yearly: 7,
-        venmo_search_term: 'paid you', paypal_search_term: 'sent you', zelle_search_term: 'received',
-        smtp_host: "", smtp_port: 465, smtp_user: "", smtp_pass: ""
+        fee_monthly: "0.00", 
+        fee_yearly: "0.00", 
+        scan_interval_min: 60,
+        notify_days_monthly: 3, 
+        notify_days_yearly: 7,
+        venmo_search_term: 'paid you', 
+        paypal_search_term: 'sent you', 
+        zelle_search_term: 'received',
+        smtp_host: "", 
+        smtp_port: 465, 
+        smtp_user: "", 
+        smtp_pass: ""
     });
     
     const [servers, setServers] = useState([]);
     const [scanners, setScanners] = useState([]);
     const [loading, setLoading] = useState(true);
     
+    // Forms
     const [serverForm, setServerForm] = useState({ id: null, name: '', token: '', url: '' });
     const [scannerForm, setScannerForm] = useState({ id: null, type: 'Venmo', email: '', password: '', imap_server: 'imap.gmail.com', port: 993, enabled: true });
     
@@ -37,11 +46,15 @@ const Settings = () => {
         loadData();
     }, []);
 
+    // --- HANDLERS ---
+
     const handleSaveSettings = async () => {
         try {
             await apiPost('/settings', settings, localStorage.getItem('admin_token'));
             alert('General Settings Saved Successfully');
-        } catch (e) { alert('Save failed'); }
+        } catch (e) { 
+            alert('Save failed: ' + e.message); 
+        }
     };
 
     // --- PLEX SERVERS ---
@@ -127,26 +140,41 @@ const Settings = () => {
 
             {/* 1. FINANCIALS */}
             <div className="card">
-                <h3>Financials & Automation Schedule</h3>
+                <h3>Financials & Automation</h3>
                 <div className="grid-responsive" style={{marginBottom:'15px'}}>
-                    <div style={{flex:1}}><label>Monthly Fee ($)</label><input className="input" value={settings.fee_monthly} onChange={e=>setSettings({...settings, fee_monthly: e.target.value})} placeholder="0.00" /></div>
-                    <div style={{flex:1}}><label>Yearly Fee ($)</label><input className="input" value={settings.fee_yearly} onChange={e=>setSettings({...settings, fee_yearly: e.target.value})} placeholder="0.00" /></div>
+                    <div style={{flex:1}}>
+                        <label>Monthly Fee ($)</label>
+                        <input className="input" type="number" step="0.01" value={settings.fee_monthly} onChange={e=>setSettings({...settings, fee_monthly: e.target.value})} />
+                    </div>
+                    <div style={{flex:1}}>
+                        <label>Yearly Fee ($)</label>
+                        <input className="input" type="number" step="0.01" value={settings.fee_yearly} onChange={e=>setSettings({...settings, fee_yearly: e.target.value})} />
+                    </div>
                 </div>
                 <div className="grid-responsive">
-                    <div style={{flex:1}}><label>Monthly Reminder (Days)</label><input className="input" type="number" value={settings.notify_days_monthly} onChange={e=>setSettings({...settings, notify_days_monthly: parseInt(e.target.value)})} /></div>
-                    <div style={{flex:1}}><label>Yearly Reminder (Days)</label><input className="input" type="number" value={settings.notify_days_yearly} onChange={e=>setSettings({...settings, notify_days_yearly: parseInt(e.target.value)})} /></div>
-                    <div style={{flex:1}}><label>Scan Interval (min)</label><input className="input" type="number" value={settings.scan_interval_min} onChange={e=>setSettings({...settings, scan_interval_min: parseInt(e.target.value)})} /></div>
+                    <div style={{flex:1}}>
+                        <label>Monthly Reminder (Days)</label>
+                        <input className="input" type="number" value={settings.notify_days_monthly} onChange={e=>setSettings({...settings, notify_days_monthly: parseInt(e.target.value) || 0})} />
+                    </div>
+                    <div style={{flex:1}}>
+                        <label>Yearly Reminder (Days)</label>
+                        <input className="input" type="number" value={settings.notify_days_yearly} onChange={e=>setSettings({...settings, notify_days_yearly: parseInt(e.target.value) || 0})} />
+                    </div>
+                    <div style={{flex:1}}>
+                        <label>Scan Interval (min)</label>
+                        <input className="input" type="number" value={settings.scan_interval_min} onChange={e=>setSettings({...settings, scan_interval_min: parseInt(e.target.value) || 60})} />
+                    </div>
                 </div>
             </div>
 
             {/* 2. PAYMENT SCANNERS */}
             <div className="card">
-                <h3>Payment Scanners (IMAP)</h3>
+                <h3>Payment Scanners</h3>
                 <div className="table-container">
                     <table className="table" style={{marginBottom:'15px'}}>
                         <thead><tr><th>Type</th><th>Email</th><th>Server</th><th>Actions</th></tr></thead>
                         <tbody>
-                            {Array.isArray(scanners) && scanners.map(s => (
+                            {scanners.map(s => (
                                 <tr key={s.id}>
                                     <td><span style={{fontWeight:'bold'}}>{s.type}</span></td>
                                     <td>{s.email}</td>
@@ -165,7 +193,7 @@ const Settings = () => {
                     </table>
                 </div>
                 
-                <div style={{borderTop:'1px solid var(--border)', paddingTop:'10px'}}>
+                <div style={{borderTop:'1px solid var(--border)', paddingTop:'15px'}}>
                     <h4>{isEditingScanner ? 'Edit Scanner' : 'Add Scanner'}</h4>
                     <div className="grid-responsive" style={{marginBottom:'10px'}}>
                         <div style={{flex:1}}>
@@ -186,8 +214,8 @@ const Settings = () => {
                             </label>
                         </div>
                     </div>
-                    <div className="flex-gap" style={{marginTop:'10px'}}>
-                        <button className="button" onClick={handleSaveScanner}>Save Scanner</button>
+                    <div className="flex-gap" style={{marginTop:'15px'}}>
+                        <button className="button" onClick={handleSaveScanner}>Save Scanner Account</button>
                         {isEditingScanner && <button className="button btn-secondary" onClick={()=>{setIsEditingScanner(false); setScannerForm({id:null, type:'Venmo', email:'', password:'', imap_server:'imap.gmail.com', port:993, enabled:true});}}>Cancel</button>}
                     </div>
                 </div>
@@ -250,7 +278,7 @@ const Settings = () => {
                 </div>
             </div>
 
-            <button className="button" onClick={handleSaveSettings} style={{width:'100%', padding:'15px', fontSize:'1.1rem'}}>Save General Settings</button>
+            <button className="button" onClick={handleSaveSettings} style={{width:'100%', padding:'15px', fontSize:'1.1rem', marginTop:'20px'}}>Save General Settings</button>
         </div>
     );
 };
