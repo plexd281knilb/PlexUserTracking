@@ -1,0 +1,132 @@
+/* --- THEME VARIABLES --- */
+:root {
+  /* Light Mode Defaults */
+  --bg-main: #f8fafc;       /* Light Grey Background */
+  --bg-card: #ffffff;       /* White Cards */
+  --bg-input: #ffffff;      /* White Inputs */
+  --text-main: #0f172a;     /* Dark Text */
+  --text-muted: #64748b;    /* Grey Text */
+  --border: #e2e8f0;        /* Light Border */
+  --highlight: #f1f5f9;     /* Hover Color */
+  
+  /* Status Colors (Same for both) */
+  --danger: #ef4444;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --info: #3b82f6;
+}
+
+/* Dark Mode Overrides */
+[data-theme='dark'] {
+  --bg-main: #0f172a;       /* Dark Blue Background */
+  --bg-card: #1e293b;       /* Darker Blue Cards */
+  --bg-input: #334155;      /* Grey/Blue Inputs */
+  --text-main: #f8fafc;     /* White Text */
+  --text-muted: #94a3b8;    /* Light Grey Text */
+  --border: #334155;        /* Dark Border */
+  --highlight: #334155;     /* Hover Color */
+}
+
+/* --- GLOBAL STYLES --- */
+body {
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0;
+  padding: 20px;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+/* --- LAYOUT UTILITIES --- */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-bottom: 50px;
+}
+
+.card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Flex Container that Wraps on Mobile */
+.flex-row {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  flex-wrap: wrap; /* CRITICAL FOR MOBILE */
+}
+
+.flex-gap { gap: 10px; }
+.space-between { justify-content: space-between; }
+.justify-end { justify-content: flex-end; }
+
+/* --- FORMS --- */
+.input {
+  background-color: var(--bg-input);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  border-radius: 6px;
+  width: 100%;
+  box-sizing: border-box; /* Prevents padding from breaking width */
+}
+
+.button {
+  background-color: var(--info);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.button:hover { opacity: 0.9; }
+.button.danger { background-color: var(--danger); }
+.button.secondary { background-color: var(--text-muted); }
+
+/* --- TABLES --- */
+.table-container {
+  overflow-x: auto; /* Makes table scroll sideways on mobile instead of breaking layout */
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 600px; /* Forces scroll on small screens */
+}
+
+.table th { text-align: left; padding: 12px; border-bottom: 2px solid var(--border); color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; }
+.table td { padding: 12px; border-bottom: 1px solid var(--border); }
+.table tr:last-child td { border-bottom: none; }
+
+/* --- MODALS --- */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(0,0,0,0.7);
+  display: flex; justify-content: center; alignItems: center;
+  z-index: 1000;
+  padding: 20px; /* Prevents edge touching on phone */
+}
+
+.modal-content {
+  background-color: var(--bg-card);
+  width: 100%;
+  max-width: 500px; /* Responsive width */
+  border-radius: 8px;
+  padding: 20px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* --- MOBILE TWEAKS --- */
+@media (max-width: 768px) {
+  .flex-mobile-col { flex-direction: column; align-items: stretch; }
+  .hide-on-mobile { display: none; }
+  h1 { font-size: 1.5rem; }
+}

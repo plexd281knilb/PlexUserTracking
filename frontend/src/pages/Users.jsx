@@ -32,8 +32,6 @@ const Users = () => {
     // --- HELPER: Get Date Object for Sorting/Display ---
     const getPaidDate = (user) => {
         if (user.payment_freq === 'Exempt') return new Date(9999, 11, 31);
-        
-        // Default for Never Paid or Active/Pending
         const defaultDate = new Date(2025, 11, 31);
 
         if (!user.last_paid || user.last_paid === 'Never') {
@@ -61,8 +59,7 @@ const Users = () => {
                 endDate.setMonth(11); 
                 endDate.setDate(31);  
             } else {
-                // Partial payment -> Default 2025-12-31
-                return defaultDate;
+                return defaultDate; // Partial
             }
         } 
         else if (user.payment_freq === 'Monthly' && monthlyFee > 0) {
@@ -72,12 +69,11 @@ const Users = () => {
                 endDate.setMonth(endDate.getMonth() + monthsPaid);
                 endDate = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0); 
             } else {
-                // Partial payment -> Default 2025-12-31
-                return defaultDate;
+                return defaultDate; // Partial
             }
         }
 
-        return isValid ? endDate : defaultDate; // Fallback to default if math fails
+        return isValid ? endDate : defaultDate;
     };
 
     // --- HELPER: Render Date Badge ---
@@ -85,16 +81,15 @@ const Users = () => {
         const date = getPaidDate(user);
         const year = date.getFullYear();
 
-        if (year === 9999) return <span style={{color:'#10b981', fontWeight:'bold'}}>Forever</span>;
-        if (year === 1970) return <span style={{color:'#94a3b8'}}>-</span>;
+        if (year === 9999) return <span style={{color:'var(--success)', fontWeight:'bold'}}>Forever</span>;
+        if (year === 1970) return <span style={{color:'var(--text-muted)'}}>-</span>;
         
-        // Highlight Default Date (Partial/Never)
+        // Highlight Default Date
         const isDefault = year === 2025 && date.getMonth() === 11 && date.getDate() === 31;
-        
         const today = new Date();
         const isExpired = date < today;
         
-        const color = isExpired ? '#ef4444' : (isDefault ? '#f59e0b' : '#10b981');
+        const color = isExpired ? 'var(--danger)' : (isDefault ? 'var(--warning)' : 'var(--success)');
         
         return <span style={{color: color, fontWeight:'bold'}}>{date.toISOString().split('T')[0]}</span>;
     };
@@ -215,88 +210,90 @@ const Users = () => {
     };
 
     const getFreqBadgeColor = (freq) => {
-        switch(freq) { case 'Exempt': return '#eab308'; case 'Yearly': return '#8b5cf6'; default: return '#64748b'; }
+        switch(freq) { case 'Exempt': return 'btn-warning'; case 'Yearly': return 'btn-secondary'; default: return 'btn-secondary'; }
     };
 
     return (
-        <div>
-            <div className="flex" style={{justifyContent:'space-between', alignItems:'center'}}>
+        <div className="container">
+            <div className="flex-between" style={{marginBottom:'20px'}}>
                 <h1>User Management</h1>
-                <div className="flex" style={{gap: '10px'}}>
-                    <button className="button" style={{backgroundColor: '#64748b'}} onClick={handleRemap}>🔄 Re-Map Payments</button>
+                <div className="flex-gap">
+                    <button className="button btn-secondary" onClick={handleRemap}>Re-Map Payments</button>
                     <button className="button" onClick={handleSync}>Sync Plex Users</button>
                 </div>
             </div>
 
             {selectedIds.length > 0 && (
-                <div className="card" style={{backgroundColor: '#334155', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px', borderLeft: '4px solid #38bdf8'}}>
-                    <span style={{fontWeight: 'bold', color: 'white'}}>{selectedIds.length} Selected</span>
-                    <div className="flex" style={{gap: '10px', flexWrap:'wrap'}}>
-                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#eab308', color: 'black'}} onClick={() => handleBulkUpdate({payment_freq: 'Exempt'})}>Set Exempt</button>
-                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#64748b'}} onClick={() => handleBulkUpdate({payment_freq: 'Monthly'})}>Set Monthly</button>
-                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#8b5cf6'}} onClick={() => handleBulkUpdate({payment_freq: 'Yearly'})}>Set Yearly</button>
+                <div className="card flex-between" style={{ borderLeft: '4px solid var(--accent)' }}>
+                    <span style={{fontWeight: 'bold'}}>{selectedIds.length} Selected</span>
+                    <div className="flex-gap">
+                        <button className="button btn-warning" onClick={() => handleBulkUpdate({payment_freq: 'Exempt'})}>Set Exempt</button>
+                        <button className="button btn-secondary" onClick={() => handleBulkUpdate({payment_freq: 'Monthly'})}>Set Monthly</button>
+                        <button className="button btn-secondary" onClick={() => handleBulkUpdate({payment_freq: 'Yearly'})}>Set Yearly</button>
                         
-                        <div style={{width:'1px', height:'20px', backgroundColor:'rgba(255,255,255,0.2)', margin:'0 5px'}}></div>
+                        <div className="hide-mobile" style={{width:'1px', height:'20px', backgroundColor:'var(--border)', margin:'0 5px'}}></div>
                         
-                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#10b981'}} onClick={() => handleBulkUpdate({status: 'Active'})}>Set Active</button>
-                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#f59e0b', color:'black'}} onClick={() => handleBulkUpdate({status: 'Pending'})}>Set Pending</button>
-                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#ef4444'}} onClick={() => handleBulkUpdate({status: 'Disabled'})}>Set Disabled</button>
+                        <button className="button btn-success" onClick={() => handleBulkUpdate({status: 'Active'})}>Set Active</button>
+                        <button className="button btn-warning" onClick={() => handleBulkUpdate({status: 'Pending'})}>Set Pending</button>
+                        <button className="button btn-danger" onClick={() => handleBulkUpdate({status: 'Disabled'})}>Set Disabled</button>
                         
-                        <div style={{width:'1px', height:'20px', backgroundColor:'rgba(255,255,255,0.2)', margin:'0 5px'}}></div>
+                        <div className="hide-mobile" style={{width:'1px', height:'20px', backgroundColor:'var(--border)', margin:'0 5px'}}></div>
 
-                        <button className="button" style={{fontSize: '0.8rem', padding: '6px 12px', backgroundColor: '#b91c1c'}} onClick={handleBulkDelete}>Delete</button>
+                        <button className="button btn-danger" onClick={handleBulkDelete}>Delete</button>
                     </div>
                 </div>
             )}
 
-            <div className="card">
-                <table className="table">
-                    <thead>
-                        <tr>
-                            <th style={{width: '40px'}}><input type="checkbox" onChange={handleSelectAll} checked={users.length > 0 && selectedIds.length === users.length} /></th>
-                            <th onClick={() => requestSort('username')} style={{cursor:'pointer', userSelect:'none'}}>Username {getSortIcon('username')}</th>
-                            <th onClick={() => requestSort('full_name')} style={{cursor:'pointer', userSelect:'none'}}>Full Name {getSortIcon('full_name')}</th>
-                            <th onClick={() => requestSort('email')} style={{cursor:'pointer', userSelect:'none'}}>Email {getSortIcon('email')}</th>
-                            <th onClick={() => requestSort('payment_freq')} style={{cursor:'pointer', userSelect:'none'}}>Frequency {getSortIcon('payment_freq')}</th>
-                            <th onClick={() => requestSort('status')} style={{cursor:'pointer', userSelect:'none'}}>Status {getSortIcon('status')}</th>
-                            <th onClick={() => requestSort('last_paid')} style={{cursor:'pointer', userSelect:'none'}}>Last Paid {getSortIcon('last_paid')}</th>
-                            <th onClick={() => requestSort('paid_thru')} style={{cursor:'pointer', userSelect:'none'}}>Paid Thru {getSortIcon('paid_thru')}</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {sortedUsers.map(u => (
-                            <tr key={u.id} style={{backgroundColor: selectedIds.includes(u.id) ? 'rgba(56, 189, 248, 0.1)' : 'transparent'}}>
-                                <td style={{textAlign: 'center'}}><input type="checkbox" checked={selectedIds.includes(u.id)} onChange={() => handleSelectRow(u.id)} /></td>
-                                <td style={{fontWeight:'bold'}}>{u.username}</td>
-                                <td>{u.full_name || '-'}</td>
-                                <td style={{fontSize:'0.85rem', color:'#94a3b8'}}>{u.email}</td>
-                                <td><span style={{fontSize:'0.75rem', padding:'2px 6px', borderRadius:'4px', backgroundColor: getFreqBadgeColor(u.payment_freq), color: u.payment_freq === 'Exempt' ? 'black' : 'white', fontWeight: 'bold'}}>{u.payment_freq || 'Exempt'}</span></td>
-                                <td><span style={{color: u.status === 'Active' ? '#10b981' : '#ef4444', fontWeight: 'bold'}}>{u.status}</span></td>
-                                <td>{u.last_paid || 'Never'}{u.last_payment_amount && <span style={{marginLeft: '8px', fontSize: '0.75rem', color: '#10b981', padding: '2px 5px'}}>({u.last_payment_amount})</span>}</td>
-                                <td>{renderPaidThrough(u)}</td>
-                                <td>
-                                    <div className="flex" style={{gap:'5px'}}>
-                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem'}} onClick={() => setEditUser(u)}>Edit</button>
-                                        <button className="button" style={{padding:'4px 8px', fontSize:'0.75rem', backgroundColor: '#f59e0b'}} onClick={() => setMatchUser(u)}>Match</button>
-                                    </div>
-                                </td>
+            <div className="card" style={{padding: 0, overflow: 'hidden'}}>
+                <div className="table-container">
+                    <table className="table">
+                        <thead>
+                            <tr>
+                                <th style={{width: '40px'}}><input type="checkbox" onChange={handleSelectAll} checked={users.length > 0 && selectedIds.length === users.length} /></th>
+                                <th onClick={() => requestSort('username')} style={{cursor:'pointer', userSelect:'none'}}>Username {getSortIcon('username')}</th>
+                                <th onClick={() => requestSort('full_name')} style={{cursor:'pointer', userSelect:'none'}}>Full Name {getSortIcon('full_name')}</th>
+                                <th onClick={() => requestSort('email')} style={{cursor:'pointer', userSelect:'none'}}>Email {getSortIcon('email')}</th>
+                                <th onClick={() => requestSort('payment_freq')} style={{cursor:'pointer', userSelect:'none'}}>Freq {getSortIcon('payment_freq')}</th>
+                                <th onClick={() => requestSort('status')} style={{cursor:'pointer', userSelect:'none'}}>Status {getSortIcon('status')}</th>
+                                <th onClick={() => requestSort('last_paid')} style={{cursor:'pointer', userSelect:'none'}}>Last Paid {getSortIcon('last_paid')}</th>
+                                <th onClick={() => requestSort('paid_thru')} style={{cursor:'pointer', userSelect:'none'}}>Paid Thru {getSortIcon('paid_thru')}</th>
+                                <th>Actions</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {sortedUsers.map(u => (
+                                <tr key={u.id} style={{backgroundColor: selectedIds.includes(u.id) ? 'rgba(56, 189, 248, 0.1)' : 'transparent'}}>
+                                    <td style={{textAlign: 'center'}}><input type="checkbox" checked={selectedIds.includes(u.id)} onChange={() => handleSelectRow(u.id)} /></td>
+                                    <td style={{fontWeight:'bold'}}>{u.username}</td>
+                                    <td>{u.full_name || '-'}</td>
+                                    <td className="small">{u.email}</td>
+                                    <td><span className={`button btn-sm ${getFreqBadgeColor(u.payment_freq)}`} style={{cursor:'default'}}>{u.payment_freq || 'Exempt'}</span></td>
+                                    <td><span style={{color: u.status === 'Active' ? 'var(--success)' : 'var(--danger)', fontWeight: 'bold'}}>{u.status}</span></td>
+                                    <td>{u.last_paid || 'Never'}{u.last_payment_amount && <span style={{marginLeft: '8px', fontSize: '0.75rem', color: 'var(--success)', padding: '2px 5px'}}>({u.last_payment_amount})</span>}</td>
+                                    <td>{renderPaidThrough(u)}</td>
+                                    <td>
+                                        <div className="flex-gap">
+                                            <button className="button btn-secondary btn-sm" onClick={() => setEditUser(u)}>Edit</button>
+                                            <button className="button btn-warning btn-sm" onClick={() => setMatchUser(u)}>Match</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             {editUser && (
-                <div style={modalStyle}>
-                    <div className="card" style={{minWidth: '400px', margin: 'auto'}}>
+                <div className="modal-overlay">
+                    <div className="modal-content">
                         <h3>Edit User: {editUser.username}</h3>
                         <form onSubmit={handleSaveUser} style={{display:'grid', gap:'15px'}}>
-                            <div><label className="small">Full Name</label><input className="input" value={editUser.full_name || ''} onChange={e=>setEditUser({...editUser, full_name: e.target.value})} /></div>
-                            <div><label className="small">Email</label><input className="input" value={editUser.email || ''} onChange={e=>setEditUser({...editUser, email: e.target.value})} /></div>
-                            <div className="flex" style={{gap:'10px'}}>
+                            <div><label>Full Name</label><input className="input" value={editUser.full_name || ''} onChange={e=>setEditUser({...editUser, full_name: e.target.value})} /></div>
+                            <div><label>Email</label><input className="input" value={editUser.email || ''} onChange={e=>setEditUser({...editUser, email: e.target.value})} /></div>
+                            <div className="grid-responsive">
                                 <div style={{flex:1}}>
-                                    <label className="small">Status</label>
+                                    <label>Status</label>
                                     <select className="input" value={editUser.status || 'Pending'} onChange={e=>setEditUser({...editUser, status: e.target.value})}>
                                         <option value="Active">Active</option>
                                         <option value="Disabled">Disabled</option>
@@ -304,7 +301,7 @@ const Users = () => {
                                     </select>
                                 </div>
                                 <div style={{flex:1}}>
-                                    <label className="small">Frequency</label>
+                                    <label>Frequency</label>
                                     <select className="input" value={editUser.payment_freq || 'Exempt'} onChange={e=>setEditUser({...editUser, payment_freq: e.target.value})}>
                                         <option value="Exempt">Exempt</option>
                                         <option value="Monthly">Monthly</option>
@@ -312,9 +309,9 @@ const Users = () => {
                                     </select>
                                 </div>
                             </div>
-                            <div><label className="small">Last Paid</label><input className="input" type="date" value={editUser.last_paid || ''} onChange={e=>setEditUser({...editUser, last_paid: e.target.value})} /></div>
-                            <div className="flex" style={{justifyContent:'flex-end'}}>
-                                <button type="button" className="button" style={{backgroundColor:'#64748b', marginRight:'10px'}} onClick={()=>setEditUser(null)}>Cancel</button>
+                            <div><label>Last Paid</label><input className="input" type="date" value={editUser.last_paid || ''} onChange={e=>setEditUser({...editUser, last_paid: e.target.value})} /></div>
+                            <div className="flex-end">
+                                <button type="button" className="button btn-secondary" onClick={()=>setEditUser(null)}>Cancel</button>
                                 <button type="submit" className="button">Save</button>
                             </div>
                         </form>
@@ -323,35 +320,32 @@ const Users = () => {
             )}
 
             {matchUser && (
-                <div style={modalStyle}>
-                    <div className="card" style={{minWidth: '600px', maxHeight: '80vh', overflowY: 'auto', margin: 'auto'}}>
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{maxWidth: '700px'}}>
                         <h3>Match Payment to {matchUser.username}</h3>
-                        <table className="table" style={{marginTop:'15px'}}>
-                            <thead><tr><th>Date</th><th>Sender</th><th>Amount</th><th>Action</th></tr></thead>
-                            <tbody>
-                                {logs.map((log, i) => (
-                                    <tr key={i} style={{opacity: log.status === 'Matched' ? 0.8 : 1}}>
-                                        <td>{log.date}</td>
-                                        <td>{log.sender}</td>
-                                        <td>{log.amount}</td>
-                                        <td>{log.status === 'Matched' ? <button className="button" style={{padding:'2px', backgroundColor:'#64748b'}} onClick={() => handleUnmap(log)}>Unmap</button> : <button className="button" style={{padding:'2px'}} onClick={() => handleMatch(log)}>Select</button>}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        <button className="button" style={{backgroundColor:'#64748b', marginTop:'15px'}} onClick={()=>setMatchUser(null)}>Close</button>
+                        <div className="table-container" style={{maxHeight: '60vh', overflowY: 'auto'}}>
+                            <table className="table">
+                                <thead><tr><th>Date</th><th>Sender</th><th>Amount</th><th>Action</th></tr></thead>
+                                <tbody>
+                                    {logs.map((log, i) => (
+                                        <tr key={i} style={{opacity: log.status === 'Matched' ? 0.8 : 1}}>
+                                            <td>{log.date}</td>
+                                            <td>{log.sender}</td>
+                                            <td>{log.amount}</td>
+                                            <td>{log.status === 'Matched' ? <button className="button btn-secondary btn-sm" onClick={() => handleUnmap(log)}>Unmap</button> : <button className="button btn-warning btn-sm" onClick={() => handleMatch(log)}>Select</button>}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="flex-end" style={{marginTop:'15px'}}>
+                            <button className="button btn-secondary" onClick={()=>setMatchUser(null)}>Close</button>
+                        </div>
                     </div>
                 </div>
             )}
         </div>
     );
-};
-
-const modalStyle = {
-    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    zIndex: 1000
 };
 
 export default Users;

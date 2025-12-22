@@ -64,7 +64,7 @@ export default function Zelle() {
         alert("Search term saved.");
     };
 
-    // --- NEW: Handle Manual Payment ---
+    // --- Manual Payment Logic ---
     const handleManualAdd = async () => {
         if (!manualPayment.date || !manualPayment.sender || !manualPayment.amount) {
             alert("Please fill in Date, Sender, and Amount.");
@@ -93,64 +93,66 @@ export default function Zelle() {
     };
 
     return (
-        <div className="card">
-            <div className="flex" style={{justifyContent:'space-between'}}>
+        <div className="container">
+            <div className="flex-between">
                 <h3>Zelle Scanners</h3>
                 <button className="button" onClick={handleScan} disabled={loading}>{loading?'Scanning...':'Scan Now'}</button>
             </div>
 
-            <div style={{marginTop:'20px', padding:'10px', backgroundColor:'var(--bg-input)', borderRadius:'8px', display:'flex', alignItems:'center', gap:'10px'}}>
-                <label className="small" style={{whiteSpace:'nowrap'}}>Search Term (Subject):</label>
-                <input className="input" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
-                <button className="button" style={{padding:'4px 10px'}} onClick={handleSaveSettings}>Save Config</button>
-            </div>
-
-            <table className="table" style={{marginTop:'20px'}}>
-                <thead><tr><th>Email</th><th>Server</th><th>Last Scanned</th><th>Action</th></tr></thead>
-                <tbody>
-                    {accounts.map(acc => (
-                        <tr key={acc.id}>
-                            <td>{acc.email}</td><td>{acc.imap_server}</td><td>{acc.last_scanned}</td>
-                            <td><button className="button" style={{backgroundColor:'var(--danger)', padding:'4px'}} onClick={()=>handleDelete(acc.id)}>Remove</button></td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-
-            <div style={{marginTop:'30px', borderTop:'1px solid var(--border)', paddingTop:'20px'}}>
-                <h4>Add Scanner Account</h4>
-                <div className="flex" style={{gap:'10px'}}>
-                    <input className="input" placeholder="Email" value={newAccount.email} onChange={e=>setNewAccount({...newAccount, email:e.target.value})} />
-                    <input className="input" type="password" placeholder="App Password" value={newAccount.password} onChange={e=>setNewAccount({...newAccount, password:e.target.value})} />
+            <div className="card grid-responsive" style={{marginTop:'20px', alignItems:'end'}}>
+                <div style={{flex:1}}>
+                    <label>Search Term (Subject):</label>
+                    <input className="input" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
                 </div>
-                <button className="button" style={{marginTop:'10px'}} onClick={handleAdd}>Save & Test</button>
-                {status && <span className="small" style={{color:'red', marginLeft:'10px'}}>{status}</span>}
+                <button className="button btn-secondary" onClick={handleSaveSettings}>Save Config</button>
             </div>
 
-            {/* --- MANUAL ENTRY SECTION --- */}
-            <div style={{marginTop:'40px', borderTop:'1px solid var(--border)', paddingTop:'20px'}}>
+            <div className="card table-container">
+                <table className="table">
+                    <thead><tr><th>Email</th><th>Server</th><th>Last Scanned</th><th>Action</th></tr></thead>
+                    <tbody>
+                        {accounts.map(acc => (
+                            <tr key={acc.id}>
+                                <td>{acc.email}</td><td>{acc.imap_server}</td><td>{acc.last_scanned}</td>
+                                <td><button className="button btn-danger btn-sm" onClick={()=>handleDelete(acc.id)}>Remove</button></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            <div className="card">
+                <h4>Add Scanner Account</h4>
+                <div className="grid-responsive" style={{alignItems:'end'}}>
+                    <div style={{flex:1}}><label>Email</label><input className="input" value={newAccount.email} onChange={e=>setNewAccount({...newAccount, email:e.target.value})} /></div>
+                    <div style={{flex:1}}><label>App Password</label><input className="input" type="password" value={newAccount.password} onChange={e=>setNewAccount({...newAccount, password:e.target.value})} /></div>
+                    <button className="button" onClick={handleAdd}>Save & Test</button>
+                </div>
+                {status && <span className="small" style={{color:'var(--danger)', marginTop:'10px'}}>{status}</span>}
+            </div>
+
+            {/* --- MANUAL ENTRY --- */}
+            <div className="card">
                 <h3>Manual Entry</h3>
-                <p className="small" style={{color:'var(--text-muted)', marginBottom:'10px'}}>
-                    Since Zelle emails may not be scannable, you can manually enter payments here to link them to users.
-                </p>
-                <div className="flex" style={{gap:'10px', alignItems:'flex-end'}}>
+                <p className="small" style={{marginBottom:'10px'}}>Manually enter Zelle payments if auto-scan misses them.</p>
+                <div className="grid-responsive" style={{alignItems:'end'}}>
                     <div style={{flex:1}}>
-                        <label className="small">Date</label>
+                        <label>Date</label>
                         <input type="date" className="input" value={manualPayment.date} onChange={e=>setManualPayment({...manualPayment, date: e.target.value})} />
                     </div>
                     <div style={{flex:2}}>
-                        <label className="small">Sender Name</label>
+                        <label>Sender Name</label>
                         <input className="input" placeholder="e.g. John Doe" value={manualPayment.sender} onChange={e=>setManualPayment({...manualPayment, sender: e.target.value})} />
                     </div>
                     <div style={{flex:1}}>
-                        <label className="small">Amount</label>
+                        <label>Amount</label>
                         <input className="input" placeholder="$50.00" value={manualPayment.amount} onChange={e=>setManualPayment({...manualPayment, amount: e.target.value})} />
                     </div>
                     <button className="button" onClick={handleManualAdd}>Add Payment</button>
                 </div>
             </div>
 
-            <div style={{marginTop:'40px'}}>
+            <div className="card table-container">
                 <h3>History</h3>
                 <table className="table">
                     <thead><tr><th>Date</th><th>Sender</th><th>Amount</th><th>Status</th><th>User</th><th>Actions</th></tr></thead>
@@ -160,9 +162,9 @@ export default function Zelle() {
                                 <td>{log.date}</td><td>{log.sender}</td><td>{log.amount}</td>
                                 <td>{log.status}</td><td>{log.mapped_user || '-'}</td>
                                 <td>
-                                    <div className="flex" style={{gap:'5px'}}>
-                                        {log.status === 'Unmapped' && <button className="button" style={{backgroundColor:'#f59e0b', padding:'4px'}} onClick={()=>{setMatchLog(log); setSelectedUserId('');}}>Link</button>}
-                                        <button className="button" style={{backgroundColor:'#ef4444', padding:'4px'}} onClick={()=>handleDeleteLog(log)}>Del</button>
+                                    <div className="flex-gap">
+                                        {log.status === 'Unmapped' && <button className="button btn-warning btn-sm" onClick={()=>{setMatchLog(log); setSelectedUserId('');}}>Link</button>}
+                                        <button className="button btn-danger btn-sm" onClick={()=>handleDeleteLog(log)}>Del</button>
                                     </div>
                                 </td>
                             </tr>
@@ -172,16 +174,16 @@ export default function Zelle() {
             </div>
 
             {matchLog && (
-                <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, backgroundColor:'rgba(0,0,0,0.8)', display:'flex', justifyContent:'center', alignItems:'center'}}>
-                    <div className="card" style={{minWidth:'400px'}}>
+                <div className="modal-overlay">
+                    <div className="modal-content">
                         <h3>Link Payment</h3>
                         <p>Sender: <b>{matchLog.sender}</b> ({matchLog.amount})</p>
                         <select className="input" value={selectedUserId} onChange={e=>setSelectedUserId(e.target.value)} style={{marginTop:'10px'}}>
                             <option value="">Select User...</option>
                             {users.map(u => <option key={u.id} value={u.id}>{u.username} ({u.full_name})</option>)}
                         </select>
-                        <div className="flex" style={{marginTop:'20px', gap:'10px', justifyContent:'flex-end'}}>
-                            <button className="button" style={{backgroundColor:'#64748b'}} onClick={()=>setMatchLog(null)}>Cancel</button>
+                        <div className="flex-end" style={{marginTop:'20px'}}>
+                            <button className="button btn-secondary" onClick={()=>setMatchLog(null)}>Cancel</button>
                             <button className="button" onClick={handleMatch}>Confirm</button>
                         </div>
                     </div>

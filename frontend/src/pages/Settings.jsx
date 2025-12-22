@@ -122,123 +122,132 @@ const Settings = () => {
     if (loading) return <div>Loading...</div>;
 
     return (
-        <div style={{ maxWidth: '900px', margin: '0 auto', paddingBottom: '50px' }}>
+        <div className="container">
             <h1>System Settings</h1>
 
             {/* 1. FINANCIALS */}
-            <div className="card" style={{marginBottom:'20px'}}>
+            <div className="card">
                 <h3>Financials & Automation Schedule</h3>
-                <div className="flex" style={{gap:'20px', marginBottom:'15px'}}>
-                    <div style={{flex:1}}><label className="small">Monthly Fee ($)</label><input className="input" value={settings.fee_monthly} onChange={e=>setSettings({...settings, fee_monthly: e.target.value})} placeholder="0.00" /></div>
-                    <div style={{flex:1}}><label className="small">Yearly Fee ($)</label><input className="input" value={settings.fee_yearly} onChange={e=>setSettings({...settings, fee_yearly: e.target.value})} placeholder="0.00" /></div>
+                <div className="grid-responsive" style={{marginBottom:'15px'}}>
+                    <div style={{flex:1}}><label>Monthly Fee ($)</label><input className="input" value={settings.fee_monthly} onChange={e=>setSettings({...settings, fee_monthly: e.target.value})} placeholder="0.00" /></div>
+                    <div style={{flex:1}}><label>Yearly Fee ($)</label><input className="input" value={settings.fee_yearly} onChange={e=>setSettings({...settings, fee_yearly: e.target.value})} placeholder="0.00" /></div>
                 </div>
-                <div className="flex" style={{gap:'20px'}}>
-                    <div style={{flex:1}}><label className="small">Monthly Reminder (Days Before)</label><input className="input" type="number" value={settings.notify_days_monthly} onChange={e=>setSettings({...settings, notify_days_monthly: parseInt(e.target.value)})} /></div>
-                    <div style={{flex:1}}><label className="small">Yearly Reminder (Days Before)</label><input className="input" type="number" value={settings.notify_days_yearly} onChange={e=>setSettings({...settings, notify_days_yearly: parseInt(e.target.value)})} /></div>
-                    <div style={{flex:1}}><label className="small">Scan Interval (min)</label><input className="input" type="number" value={settings.scan_interval_min} onChange={e=>setSettings({...settings, scan_interval_min: parseInt(e.target.value)})} /></div>
+                <div className="grid-responsive">
+                    <div style={{flex:1}}><label>Monthly Reminder (Days)</label><input className="input" type="number" value={settings.notify_days_monthly} onChange={e=>setSettings({...settings, notify_days_monthly: parseInt(e.target.value)})} /></div>
+                    <div style={{flex:1}}><label>Yearly Reminder (Days)</label><input className="input" type="number" value={settings.notify_days_yearly} onChange={e=>setSettings({...settings, notify_days_yearly: parseInt(e.target.value)})} /></div>
+                    <div style={{flex:1}}><label>Scan Interval (min)</label><input className="input" type="number" value={settings.scan_interval_min} onChange={e=>setSettings({...settings, scan_interval_min: parseInt(e.target.value)})} /></div>
                 </div>
             </div>
 
             {/* 2. PAYMENT SCANNERS */}
-            <div className="card" style={{marginBottom:'20px'}}>
+            <div className="card">
                 <h3>Payment Scanners (IMAP)</h3>
-                <table className="table" style={{marginBottom:'15px'}}>
-                    <thead><tr><th>Type</th><th>Email</th><th>Server</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        {Array.isArray(scanners) && scanners.map(s => (
-                            <tr key={s.id}>
-                                <td><span style={{fontWeight:'bold'}}>{s.type}</span></td>
-                                <td>{s.email}</td>
-                                <td>{s.imap_server}</td>
-                                <td>
-                                    <div className="flex" style={{gap:'5px', alignItems:'center'}}>
-                                        <button className="button" style={{padding:'4px', fontSize:'0.7rem', backgroundColor:'#64748b'}} onClick={()=>handleTestScanner(s)}>Test</button>
-                                        <button className="button" style={{padding:'4px', fontSize:'0.7rem'}} onClick={()=>{setScannerForm(s); setIsEditingScanner(true);}}>Edit</button>
-                                        <button className="button" style={{padding:'4px', fontSize:'0.7rem', backgroundColor:'var(--danger)'}} onClick={()=>handleDeleteScanner(s.id)}>Del</button>
-                                        {testResults[`scan_${s.id}`] && <span className="small">{testResults[`scan_${s.id}`]}</span>}
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                <div className="table-container">
+                    <table className="table" style={{marginBottom:'15px'}}>
+                        <thead><tr><th>Type</th><th>Email</th><th>Server</th><th>Actions</th></tr></thead>
+                        <tbody>
+                            {Array.isArray(scanners) && scanners.map(s => (
+                                <tr key={s.id}>
+                                    <td><span style={{fontWeight:'bold'}}>{s.type}</span></td>
+                                    <td>{s.email}</td>
+                                    <td>{s.imap_server}</td>
+                                    <td>
+                                        <div className="flex-gap">
+                                            <button className="button btn-secondary btn-sm" onClick={()=>handleTestScanner(s)}>Test</button>
+                                            <button className="button btn-secondary btn-sm" onClick={()=>{setScannerForm(s); setIsEditingScanner(true);}}>Edit</button>
+                                            <button className="button btn-danger btn-sm" onClick={()=>handleDeleteScanner(s.id)}>Del</button>
+                                            {testResults[`scan_${s.id}`] && <span className="small">{testResults[`scan_${s.id}`]}</span>}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
                 
                 <div style={{borderTop:'1px solid var(--border)', paddingTop:'10px'}}>
                     <h4>{isEditingScanner ? 'Edit Scanner' : 'Add Scanner'}</h4>
-                    <div className="flex" style={{gap:'10px', flexWrap:'wrap', marginBottom:'10px'}}>
-                        <select className="input" value={scannerForm.type} onChange={e=>setScannerForm({...scannerForm, type: e.target.value})} style={{flex:1}}>
-                            <option value="Venmo">Venmo</option>
-                            <option value="Zelle">Zelle</option>
-                            <option value="PayPal">PayPal</option>
-                        </select>
-                        <input className="input" placeholder="Email" value={scannerForm.email} onChange={e=>setScannerForm({...scannerForm, email: e.target.value})} style={{flex:2}} />
-                        <input className="input" type="password" placeholder="App Password" value={scannerForm.password} onChange={e=>setScannerForm({...scannerForm, password: e.target.value})} style={{flex:2}} />
+                    <div className="grid-responsive" style={{marginBottom:'10px'}}>
+                        <div style={{flex:1}}>
+                            <label>Type</label>
+                            <select className="input" value={scannerForm.type} onChange={e=>setScannerForm({...scannerForm, type: e.target.value})}>
+                                <option value="Venmo">Venmo</option><option value="Zelle">Zelle</option><option value="PayPal">PayPal</option>
+                            </select>
+                        </div>
+                        <div style={{flex:2}}><label>Email</label><input className="input" placeholder="Email" value={scannerForm.email} onChange={e=>setScannerForm({...scannerForm, email: e.target.value})} /></div>
+                        <div style={{flex:2}}><label>App Password</label><input className="input" type="password" placeholder="App Password" value={scannerForm.password} onChange={e=>setScannerForm({...scannerForm, password: e.target.value})} /></div>
                     </div>
-                    <div className="flex" style={{gap:'10px', flexWrap:'wrap'}}>
-                        <input className="input" placeholder="IMAP Server" value={scannerForm.imap_server} onChange={e=>setScannerForm({...scannerForm, imap_server: e.target.value})} style={{flex:2}} />
-                        <input className="input" placeholder="Port" type="number" value={scannerForm.port} onChange={e=>setScannerForm({...scannerForm, port: parseInt(e.target.value)})} style={{flex:1}} />
-                        <label style={{display:'flex', alignItems:'center', gap:'5px', flex:1, cursor:'pointer'}}>
-                            <input type="checkbox" checked={scannerForm.enabled} onChange={e=>setScannerForm({...scannerForm, enabled: e.target.checked})} /> Enable
-                        </label>
+                    <div className="grid-responsive">
+                        <div style={{flex:2}}><label>IMAP Server</label><input className="input" placeholder="IMAP Server" value={scannerForm.imap_server} onChange={e=>setScannerForm({...scannerForm, imap_server: e.target.value})} /></div>
+                        <div style={{flex:1}}><label>Port</label><input className="input" placeholder="Port" type="number" value={scannerForm.port} onChange={e=>setScannerForm({...scannerForm, port: parseInt(e.target.value)})} /></div>
+                        <div style={{flex:1, display:'flex', alignItems:'flex-end'}}>
+                            <label style={{display:'flex', alignItems:'center', gap:'5px', cursor:'pointer', marginBottom:0, height:'100%'}}>
+                                <input type="checkbox" checked={scannerForm.enabled} onChange={e=>setScannerForm({...scannerForm, enabled: e.target.checked})} /> Enable
+                            </label>
+                        </div>
                     </div>
-                    <div className="flex" style={{gap:'10px', marginTop:'10px'}}>
+                    <div className="flex-gap" style={{marginTop:'10px'}}>
                         <button className="button" onClick={handleSaveScanner}>Save Scanner</button>
-                        {isEditingScanner && <button className="button" style={{backgroundColor:'#64748b'}} onClick={()=>{setIsEditingScanner(false); setScannerForm({id:null, type:'Venmo', email:'', password:'', imap_server:'imap.gmail.com', port:993, enabled:true});}}>Cancel</button>}
+                        {isEditingScanner && <button className="button btn-secondary" onClick={()=>{setIsEditingScanner(false); setScannerForm({id:null, type:'Venmo', email:'', password:'', imap_server:'imap.gmail.com', port:993, enabled:true});}}>Cancel</button>}
                     </div>
                 </div>
             </div>
 
             {/* 3. PLEX SERVERS */}
-            <div className="card" style={{marginBottom:'20px'}}>
+            <div className="card">
                 <h3>Plex Servers (For Sync)</h3>
-                <table className="table" style={{marginBottom:'15px'}}>
-                    <thead><tr><th>Name</th><th>URL</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        {Array.isArray(servers) && servers.map(s => (
-                            <tr key={s.id}>
-                                <td>{s.name}</td>
-                                <td>{s.url || 'Auto'}</td>
-                                <td>
-                                    <div className="flex" style={{gap:'5px', alignItems:'center'}}>
-                                        <button className="button" style={{padding:'4px', fontSize:'0.7rem', backgroundColor:'#64748b'}} onClick={()=>handleTestServer(s)}>Test</button>
-                                        <button className="button" style={{padding:'4px', fontSize:'0.7rem'}} onClick={()=>{setServerForm(s); setIsEditingServer(true);}}>Edit</button>
-                                        <button className="button" style={{padding:'4px', fontSize:'0.7rem', backgroundColor:'var(--danger)'}} onClick={()=>handleDeleteServer(s.id)}>Del</button>
-                                        {testResults[s.id] && <span className="small">{testResults[s.id]}</span>}
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                <div className="table-container">
+                    <table className="table" style={{marginBottom:'15px'}}>
+                        <thead><tr><th>Name</th><th>URL</th><th>Actions</th></tr></thead>
+                        <tbody>
+                            {Array.isArray(servers) && servers.map(s => (
+                                <tr key={s.id}>
+                                    <td>{s.name}</td>
+                                    <td>{s.url || 'Auto'}</td>
+                                    <td>
+                                        <div className="flex-gap">
+                                            <button className="button btn-secondary btn-sm" onClick={()=>handleTestServer(s)}>Test</button>
+                                            <button className="button btn-secondary btn-sm" onClick={()=>{setServerForm(s); setIsEditingServer(true);}}>Edit</button>
+                                            <button className="button btn-danger btn-sm" onClick={()=>handleDeleteServer(s.id)}>Del</button>
+                                            {testResults[s.id] && <span className="small">{testResults[s.id]}</span>}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
                 <div style={{borderTop:'1px solid var(--border)', paddingTop:'10px'}}>
                     <h4>{isEditingServer ? 'Edit Server' : 'Add Server'}</h4>
-                    <div className="flex" style={{gap:'10px', flexWrap:'wrap'}}>
-                        <input className="input" placeholder="Name" value={serverForm.name} onChange={e=>setServerForm({...serverForm, name: e.target.value})} style={{flex:1}} />
-                        <input className="input" type="password" placeholder="X-Plex-Token" value={serverForm.token} onChange={e=>setServerForm({...serverForm, token: e.target.value})} style={{flex:2}} />
-                        <input className="input" placeholder="URL (Optional)" value={serverForm.url} onChange={e=>setServerForm({...serverForm, url: e.target.value})} style={{flex:2}} />
+                    <div className="grid-responsive">
+                        <div style={{flex:1}}><label>Name</label><input className="input" placeholder="Name" value={serverForm.name} onChange={e=>setServerForm({...serverForm, name: e.target.value})} /></div>
+                        <div style={{flex:2}}><label>Token</label><input className="input" type="password" placeholder="X-Plex-Token" value={serverForm.token} onChange={e=>setServerForm({...serverForm, token: e.target.value})} /></div>
+                        <div style={{flex:2}}><label>URL (Optional)</label><input className="input" placeholder="URL" value={serverForm.url} onChange={e=>setServerForm({...serverForm, url: e.target.value})} /></div>
                     </div>
-                    <div className="flex" style={{gap:'10px', marginTop:'10px'}}>
+                    <div className="flex-gap" style={{marginTop:'10px'}}>
                         <button className="button" onClick={handleSaveServer}>Save Server</button>
-                        {isEditingServer && <button className="button" style={{backgroundColor:'#64748b'}} onClick={()=>{setIsEditingServer(false); setServerForm({id:null, name:'', token:'', url:''});}}>Cancel</button>}
+                        {isEditingServer && <button className="button btn-secondary" onClick={()=>{setIsEditingServer(false); setServerForm({id:null, name:'', token:'', url:''});}}>Cancel</button>}
                     </div>
                 </div>
             </div>
 
             {/* 4. NOTIFICATIONS */}
-            <div className="card" style={{marginBottom:'20px'}}>
+            <div className="card">
                 <h3>Notifications (SMTP)</h3>
-                <div className="flex" style={{gap:'10px', marginBottom:'10px'}}>
-                    <div style={{flex:2}}><label className="small">Host</label><input className="input" placeholder="smtp.gmail.com" value={settings.smtp_host} onChange={e=>setSettings({...settings, smtp_host: e.target.value})} /></div>
-                    <div style={{flex:1}}><label className="small">Port</label><input className="input" value={settings.smtp_port} onChange={e=>setSettings({...settings, smtp_port: e.target.value})} /></div>
+                <div className="grid-responsive" style={{marginBottom:'10px'}}>
+                    <div style={{flex:2}}><label>Host</label><input className="input" placeholder="smtp.gmail.com" value={settings.smtp_host} onChange={e=>setSettings({...settings, smtp_host: e.target.value})} /></div>
+                    <div style={{flex:1}}><label>Port</label><input className="input" value={settings.smtp_port} onChange={e=>setSettings({...settings, smtp_port: e.target.value})} /></div>
                 </div>
-                <div className="flex" style={{gap:'10px'}}>
-                    <div style={{flex:1}}><label className="small">Email</label><input className="input" value={settings.smtp_user} onChange={e=>setSettings({...settings, smtp_user: e.target.value})} /></div>
-                    <div style={{flex:1}}><label className="small">Password</label><input className="input" type="password" value={settings.smtp_pass} onChange={e=>setSettings({...settings, smtp_pass: e.target.value})} /></div>
+                <div className="grid-responsive">
+                    <div style={{flex:1}}><label>Email</label><input className="input" value={settings.smtp_user} onChange={e=>setSettings({...settings, smtp_user: e.target.value})} /></div>
+                    <div style={{flex:1}}><label>Password</label><input className="input" type="password" value={settings.smtp_pass} onChange={e=>setSettings({...settings, smtp_pass: e.target.value})} /></div>
                 </div>
-                <button className="button" style={{marginTop:'10px', backgroundColor:'#64748b', fontSize:'0.9rem'}} onClick={handleTestSMTP}>
-                    {testResults.smtp === 'Sending...' ? 'Sending...' : 'Send Test Email'}
-                </button>
-                {testResults.smtp && <span className="small" style={{marginLeft:'10px'}}>{testResults.smtp}</span>}
+                <div className="flex-gap" style={{marginTop:'10px'}}>
+                    <button className="button btn-secondary" onClick={handleTestSMTP}>
+                        {testResults.smtp === 'Sending...' ? 'Sending...' : 'Send Test Email'}
+                    </button>
+                    {testResults.smtp && <span className="small">{testResults.smtp}</span>}
+                </div>
             </div>
 
             <button className="button" onClick={handleSaveSettings} style={{width:'100%', padding:'15px', fontSize:'1.1rem'}}>Save General Settings</button>
