@@ -1,5 +1,5 @@
 ﻿from flask import Blueprint, request, jsonify
-from database import load_settings, save_settings, load_servers, save_data
+from database import load_settings, save_settings, load_servers, save_data, load_data
 from integrations import get_plex_libraries, test_plex_connection, test_email_connection, test_smtp_connection
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/api/settings')
@@ -16,6 +16,55 @@ def update_settings():
     current.update(data)
     save_settings(current)
     return jsonify({'message': 'Settings saved successfully'})
+
+# --- PAYMENT SCANNERS (Restored) ---
+@settings_bp.route('/payment_accounts', methods=['GET'])
+def get_payment_accounts():
+    accounts = load_data('payment_accounts', [])
+    return jsonify(accounts if isinstance(accounts, list) else [])
+
+@settings_bp.route('/payment_accounts', methods=['POST'])
+def add_payment_account():
+    data = request.json
+    accounts = load_data('payment_accounts', [])
+    if not isinstance(accounts, list): accounts = []
+    
+    new_id = max([a.get('id', 0) for a in accounts] + [0]) + 1
+    data['id'] = new_id
+    
+    # Normalize Type
+    sType = data.get('type', '').lower()
+    if sType == 'venmo': data['type'] = 'Venmo'
+    elif sType == 'zelle': data['type'] = 'Zelle'
+    elif sType == 'paypal': data['type'] = 'PayPal'
+    
+    accounts.append(data)
+    save_data('payment_accounts', accounts)
+    return jsonify({'message': 'Scanner added', 'account': data})
+
+@settings_bp.route('/payment_accounts/<int:acc_id>', methods=['PUT'])
+def update_payment_account(acc_id):
+    data = request.json
+    accounts = load_data('payment_accounts', [])
+    for acc in accounts:
+        if acc['id'] == acc_id:
+            acc.update(data)
+            # Normalize Type
+            sType = data.get('type', '').lower()
+            if sType == 'venmo': acc['type'] = 'Venmo'
+            elif sType == 'zelle': acc['type'] = 'Zelle'
+            elif sType == 'paypal': acc['type'] = 'PayPal'
+            
+            save_data('payment_accounts', accounts)
+            return jsonify({'message': 'Scanner updated'})
+    return jsonify({'error': 'Scanner not found'}), 404
+
+@settings_bp.route('/payment_accounts/<int:acc_id>', methods=['DELETE'])
+def delete_payment_account(acc_id):
+    accounts = load_data('payment_accounts', [])
+    accounts = [a for a in accounts if a['id'] != acc_id]
+    save_data('payment_accounts', accounts)
+    return jsonify({'message': 'Scanner deleted'})
 
 # --- PLEX SERVER MANAGEMENT ---
 @settings_bp.route('/servers', methods=['GET'])

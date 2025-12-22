@@ -40,7 +40,7 @@ const Settings = () => {
     const handleSaveSettings = async () => {
         try {
             await apiPost('/settings', settings, localStorage.getItem('admin_token'));
-            alert('Settings Saved Successfully');
+            alert('General Settings Saved Successfully');
         } catch (e) { alert('Save failed'); }
     };
 
@@ -162,6 +162,7 @@ const Settings = () => {
                         ))}
                     </tbody>
                 </table>
+                
                 <div style={{borderTop:'1px solid var(--border)', paddingTop:'10px'}}>
                     <h4>{isEditingScanner ? 'Edit Scanner' : 'Add Scanner'}</h4>
                     <div className="flex" style={{gap:'10px', flexWrap:'wrap', marginBottom:'10px'}}>
@@ -240,7 +241,7 @@ const Settings = () => {
                 {testResults.smtp && <span className="small" style={{marginLeft:'10px'}}>{testResults.smtp}</span>}
             </div>
 
-            <button className="button" onClick={handleSaveSettings} style={{width:'100%', padding:'15px', fontSize:'1.1rem'}}>Save All Settings</button>
+            <button className="button" onClick={handleSaveSettings} style={{width:'100%', padding:'15px', fontSize:'1.1rem'}}>Save General Settings</button>
         </div>
     );
 };
