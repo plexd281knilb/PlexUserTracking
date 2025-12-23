@@ -11,8 +11,8 @@ import Settings from './pages/Settings';
 import Upcoming from './pages/Upcoming';
 import Expenses from './pages/Expenses';
 
-// Payment Pages (UPDATED PORTS)
-import Venmo from './pages/payments/Venmo'; 
+// Payment Pages (FIXED PATHS)
+import Venmo from './pages/payments/Venmo';
 import Zelle from './pages/payments/Zelle';
 import Paypal from './pages/payments/Paypal';
 

@@ -2,6 +2,7 @@
 from database import load_users, load_payment_logs, load_expenses, load_settings
 from datetime import datetime
 
+# --- THIS LINE FIXES THE IMPORT ERROR ---
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/api/dashboard')
 
 @dashboard_bp.route('', methods=['GET'])
