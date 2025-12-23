@@ -71,7 +71,7 @@ def load_expenses():
     data = load_data('expenses', [])
     return data if isinstance(data, list) else []
 
-# --- MISSING FUNCTION ADDED HERE ---
+# --- THIS WAS THE MISSING FUNCTION ---
 def save_expenses(expenses):
     save_data('expenses', expenses)
 
