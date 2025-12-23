@@ -12,9 +12,7 @@ def add_expense():
     data = request.json
     expenses = load_expenses()
     
-    # Generate a simple ID if not present
     if 'id' not in data:
-        # Find max existing ID or default to 0
         max_id = max([e.get('id', 0) for e in expenses] + [0])
         data['id'] = max_id + 1
         

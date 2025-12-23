@@ -81,12 +81,11 @@ def match_payment(user_id):
     save_users(users)
     save_data('payment_logs', logs)
 
-    # 3. SEND RECEIPT EMAIL (New Logic)
+    # 3. SEND RECEIPT EMAIL
     if matched_user.get('email'):
         try:
             settings = load_settings()
             subject = settings.get('email_receipt_subject', 'Payment Received')
-            # Default Body Template if not set in settings
             default_body = "Hi {full_name},\n\nWe have received your payment of {amount}. Thank you for your support!\n\n- Admin"
             body_tmpl = settings.get('email_receipt_body', default_body)
             
@@ -95,7 +94,6 @@ def match_payment(user_id):
                             .replace('{amount}', str(data.get('amount')))
             
             send_notification_email(matched_user['email'], subject, body)
-            print(f"Receipt sent to {matched_user['email']}")
         except Exception as e:
             print(f"Failed to send receipt email: {e}")
 

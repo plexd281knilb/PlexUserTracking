@@ -27,7 +27,6 @@ def get_upcoming():
         warning_date = expiry - timedelta(days=days_before)
         days_until_expiry = (expiry - today).days
         
-        # Show if expiring in next 60 days OR if overdue
         if days_until_expiry <= 60:
             upcoming_list.append({
                 "id": user['id'],

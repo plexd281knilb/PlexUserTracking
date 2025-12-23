@@ -32,7 +32,6 @@ def add_payment_account():
     new_id = max([a.get('id', 0) for a in accounts] + [0]) + 1
     data['id'] = new_id
     
-    # Normalize Type
     sType = data.get('type', '').lower()
     if sType == 'venmo': data['type'] = 'Venmo'
     elif sType == 'zelle': data['type'] = 'Zelle'
