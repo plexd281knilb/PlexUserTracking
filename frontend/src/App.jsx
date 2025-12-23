@@ -9,14 +9,14 @@ import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
 import Upcoming from './pages/Upcoming';
-import Expenses from './pages/Expenses'; // Enabled Real Expenses Page
+import Expenses from './pages/Expenses';
 
-// Payment Pages
-import Venmo from './pages/Venmo'; // Ensure file name matches (Case Sensitive!)
-import Zelle from './pages/Zelle';
-import Paypal from './pages/Paypal';
+// Payment Pages (UPDATED PORTS)
+import Venmo from './pages/payments/Venmo'; 
+import Zelle from './pages/payments/Zelle';
+import Paypal from './pages/payments/Paypal';
 
-// Email Pages (NEW)
+// Email Pages
 import MonthlyEmails from './pages/emails/MonthlyEmails';
 import YearlyEmails from './pages/emails/YearlyEmails';
 import PaymentReceipts from './pages/emails/PaymentReceipts';
@@ -50,7 +50,6 @@ function App() {
                         <Route path="/zelle" element={<Zelle />} />
                         <Route path="/paypal" element={<Paypal />} />
                         
-                        {/* New Email Routes */}
                         <Route path="/emails/monthly" element={<MonthlyEmails />} />
                         <Route path="/emails/yearly" element={<YearlyEmails />} />
                         <Route path="/emails/receipts" element={<PaymentReceipts />} />
