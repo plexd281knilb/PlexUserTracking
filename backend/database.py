@@ -71,7 +71,7 @@ def load_expenses():
     data = load_data('expenses', [])
     return data if isinstance(data, list) else []
 
-# --- CRITICAL FIX: This function was missing ---
+# --- THIS FUNCTION WAS MISSING ---
 def save_expenses(expenses):
     save_data('expenses', expenses)
 
@@ -91,7 +91,6 @@ def save_payment_accounts(type_key, updated_list):
         all_accounts = []
         
     tf = type_key.lower()
-    # Remove old entries of this type
     others = [acc for acc in all_accounts if acc.get('type', '').lower() != tf]
     
     # Ensure new entries have the correct type
