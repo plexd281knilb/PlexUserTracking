@@ -1,11 +1,11 @@
 // frontend/src/api.js
 
 const getBaseUrl = () => {
-    // If we are in development (running on port 3000), point to port 5000
-    // If in production (docker), use relative path
+    // If we are in development (running on port 3000), point to port 5052
     if (window.location.hostname === 'localhost' && window.location.port === '3000') {
-        return 'http://localhost:5000/api';
+        return 'http://localhost:5052/api';
     }
+    // In production, use relative path
     return '/api';
 };
 
@@ -32,12 +32,10 @@ const request = async (endpoint, method = 'GET', body = null, token = null) => {
     try {
         const response = await fetch(`${BASE_URL}${endpoint}`, config);
         
-        // Handle 401 Unauthorized (optional: redirect to login)
         if (response.status === 401) {
             console.warn("Unauthorized request");
         }
 
-        // Return empty object for 204 No Content
         if (response.status === 204) return {};
 
         const data = await response.json();
@@ -52,8 +50,6 @@ const request = async (endpoint, method = 'GET', body = null, token = null) => {
         throw error;
     }
 };
-
-// --- EXPORTED FUNCTIONS ---
 
 export const apiGet = (endpoint, token = null) => request(endpoint, 'GET', null, token);
 
