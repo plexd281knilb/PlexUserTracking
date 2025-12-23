@@ -40,6 +40,7 @@ app.register_blueprint(upcoming_bp)
 app.register_blueprint(expenses_bp)
 
 # --- SERVE REACT APP ---
+# This serves the index.html for any path not found (fixes SPA routing)
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
