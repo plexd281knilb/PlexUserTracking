@@ -12,7 +12,9 @@ FILES = {
     'settings': os.path.join(DATA_DIR, 'settings.json'),
     'servers': os.path.join(DATA_DIR, 'servers.json'),
     'payment_accounts': os.path.join(DATA_DIR, 'payment_accounts.json'),
-    'expenses': os.path.join(DATA_DIR, 'expenses.json')
+    'expenses': os.path.join(DATA_DIR, 'expenses.json'),
+    # ADDED THIS LINE
+    'admin': os.path.join(DATA_DIR, 'admin.json')
 }
 
 def load_data(key, default=None):
@@ -71,7 +73,6 @@ def load_expenses():
     data = load_data('expenses', [])
     return data if isinstance(data, list) else []
 
-# --- THIS WAS THE MISSING FUNCTION ---
 def save_expenses(expenses):
     save_data('expenses', expenses)
 
@@ -98,3 +99,13 @@ def save_payment_accounts(type_key, updated_list):
         acc['type'] = type_key 
     
     save_data('payment_accounts', others + updated_list)
+
+# --- ADDED THESE MISSING FUNCTIONS ---
+
+def load_admin_config():
+    # Default to setup_required = True if file doesn't exist
+    data = load_data('admin', {"setup_required": True})
+    return data if isinstance(data, dict) else {"setup_required": True}
+
+def save_admin_config(config):
+    save_data('admin', config)
