@@ -14,14 +14,14 @@ from routes.upcoming import upcoming_bp
 from routes.expenses import expenses_bp
 
 # --- PATH CONFIGURATION ---
-# Get the absolute path to the frontend build directory
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Navigate up to the parent directory, then into frontend/build
 FRONTEND_BUILD_DIR = os.path.join(os.path.dirname(BASE_DIR), 'frontend', 'build')
 
 app = Flask(__name__, static_folder=FRONTEND_BUILD_DIR, static_url_path='/')
 CORS(app)
 
-# --- SCHEDULER (Automation) ---
+# --- SCHEDULER ---
 if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
     try:
         scheduler = BackgroundScheduler()
@@ -39,19 +39,19 @@ app.register_blueprint(settings_bp)
 app.register_blueprint(upcoming_bp)
 app.register_blueprint(expenses_bp)
 
-# --- SERVE REACT APP ---
-# This serves the index.html for any path not found (fixes SPA routing)
+# --- THE CATCH-ALL ROUTE (THIS IS MISSING OR BROKEN) ---
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
+    # 1. Try to find the file in the static folder (like css/js)
     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
     
-    # Fallback to index.html for React Router
+    # 2. If not found (like /users), serve index.html
     if os.path.exists(os.path.join(app.static_folder, 'index.html')):
         return send_from_directory(app.static_folder, 'index.html')
         
-    return "Frontend not found. Please run 'npm run build' in the frontend directory.", 404
+    return "Frontend build not found. Please run npm run build.", 404
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5052, debug=True)
