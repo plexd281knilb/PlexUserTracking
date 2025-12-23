@@ -1,46 +1,65 @@
 import React, { useState, useEffect } from 'react';
-import { apiGet, apiPost } from 'api';
+import { apiGet } from '../../api';
 
 const PaymentReceipts = () => {
-    const [template, setTemplate] = useState({ 
-        email_receipt_subject: "Payment Received", 
-        email_receipt_body: "Hi {full_name},\n\nThank you for your payment of {amount}. You have been marked down as paid.\n\nThanks!"
-    });
+    const [logs, setLogs] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        apiGet('/settings').then(data => {
-            if(data.email_receipt_subject) setTemplate(prev => ({...prev, ...data}));
-        });
+        const loadData = async () => {
+            try {
+                const res = await apiGet('/payment_logs');
+                // Only show Matched payments (Receipts)
+                setLogs(res.filter(l => l.status === 'Matched'));
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadData();
     }, []);
 
-    const handleSave = async () => {
-        try {
-            await apiPost('/settings', template, localStorage.getItem('admin_token'));
-            alert('Template Saved!');
-        } catch (e) { alert('Error saving'); }
-    };
+    if (loading) return <div className="container">Loading...</div>;
 
     return (
-        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-            <h1>Payment Receipt Email</h1>
-            <div className="card">
-                <p className="small" style={{color:'var(--text-muted)', marginBottom:'20px'}}>
-                    Variables available: <code>{'{full_name}'}</code>, <code>{'{username}'}</code>, <code>{'{amount}'}</code>
-                </p>
-                <div style={{marginBottom:'15px'}}>
-                    <label className="small">Subject Line</label>
-                    <input className="input" value={template.email_receipt_subject} onChange={e => setTemplate({...template, email_receipt_subject: e.target.value})} />
-                </div>
-                <div style={{marginBottom:'15px'}}>
-                    <label className="small">Email Body</label>
-                    <textarea className="input" style={{height:'200px', fontFamily:'monospace'}} 
-                        value={template.email_receipt_body} 
-                        onChange={e => setTemplate({...template, email_receipt_body: e.target.value})} 
-                    />
-                </div>
-                <button className="button" onClick={handleSave}>Save Template</button>
+        <div className="container">
+            <h1>Payment Receipts</h1>
+            <p className="small" style={{ marginBottom: '20px' }}>
+                History of payments that have been successfully linked to users. A receipt is emailed upon linking.
+            </p>
+
+            <div className="card table-container">
+                <table className="table">
+                    <thead>
+                        <tr><th>Date</th><th>Sender</th><th>User</th><th>Amount</th><th>Service</th></tr>
+                    </thead>
+                    <tbody>
+                        {logs.length > 0 ? (
+                            logs.map((log, i) => (
+                                <tr key={i}>
+                                    <td>{log.date}</td>
+                                    <td>{log.sender}</td>
+                                    <td><strong>{log.mapped_user}</strong></td>
+                                    <td>{log.amount}</td>
+                                    <td>
+                                        <span style={{
+                                            padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold',
+                                            backgroundColor: 'var(--info)', color: 'white'
+                                        }}>
+                                            {log.service}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr><td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>No receipts found.</td></tr>
+                        )}
+                    </tbody>
+                </table>
             </div>
         </div>
     );
 };
+
 export default PaymentReceipts;

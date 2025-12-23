@@ -1,46 +1,77 @@
 import React, { useState, useEffect } from 'react';
-import { apiGet, apiPost } from 'api';
+import { apiGet } from '../../api';
 
 const YearlyEmails = () => {
-    const [template, setTemplate] = useState({ 
-        email_yearly_subject: "Plex Yearly Subscription Renewal", 
-        email_yearly_body: "Hi {full_name},\n\nYour yearly Plex subscription is up for renewal on {due_date}. Please submit payment to keep your access active.\n\nThanks!"
-    });
+    const [list, setList] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        apiGet('/settings').then(data => {
-            if(data.email_yearly_subject) setTemplate(prev => ({...prev, ...data}));
-        });
+        const loadData = async () => {
+            try {
+                const res = await apiGet('/upcoming');
+                // Filter only Yearly users
+                setList(res.filter(u => u.payment_freq === 'Yearly'));
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadData();
     }, []);
 
-    const handleSave = async () => {
-        try {
-            await apiPost('/settings', template, localStorage.getItem('admin_token'));
-            alert('Template Saved!');
-        } catch (e) { alert('Error saving'); }
+    const getStatusColor = (days) => {
+        if (days < 0) return 'var(--danger)'; 
+        if (days <= 7) return 'var(--warning)';
+        return 'var(--success)';
     };
 
+    if (loading) return <div className="container">Loading...</div>;
+
     return (
-        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-            <h1>Yearly Reminder Email</h1>
-            <div className="card">
-                <p className="small" style={{color:'var(--text-muted)', marginBottom:'20px'}}>
-                    Variables available: <code>{'{full_name}'}</code>, <code>{'{username}'}</code>, <code>{'{due_date}'}</code>
-                </p>
-                <div style={{marginBottom:'15px'}}>
-                    <label className="small">Subject Line</label>
-                    <input className="input" value={template.email_yearly_subject} onChange={e => setTemplate({...template, email_yearly_subject: e.target.value})} />
-                </div>
-                <div style={{marginBottom:'15px'}}>
-                    <label className="small">Email Body</label>
-                    <textarea className="input" style={{height:'200px', fontFamily:'monospace'}} 
-                        value={template.email_yearly_body} 
-                        onChange={e => setTemplate({...template, email_yearly_body: e.target.value})} 
-                    />
-                </div>
-                <button className="button" onClick={handleSave}>Save Template</button>
+        <div className="container">
+            <h1>Yearly Reminders</h1>
+            <p className="small" style={{ marginBottom: '20px' }}>
+                Active <b>Yearly</b> subscriptions expiring in the next 60 days.
+            </p>
+
+            <div className="card table-container">
+                <table className="table">
+                    <thead>
+                        <tr><th>User</th><th>Expires On</th><th>Reminder Date</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                        {list.length > 0 ? (
+                            list.map(item => (
+                                <tr key={item.id}>
+                                    <td>
+                                        <div style={{ fontWeight: 'bold' }}>{item.username}</div>
+                                        <div className="small">{item.email || 'No Email'}</div>
+                                    </td>
+                                    <td>{item.expiry_date}</td>
+                                    <td>{item.reminder_date}</td>
+                                    <td>
+                                        <span style={{
+                                            color: getStatusColor(item.days_until),
+                                            fontWeight: 'bold',
+                                            border: `1px solid ${getStatusColor(item.days_until)}`,
+                                            padding: '2px 8px',
+                                            borderRadius: '4px',
+                                            fontSize: '0.8rem'
+                                        }}>
+                                            {item.days_until < 0 ? `${Math.abs(item.days_until)} Days Overdue` : `${item.days_until} Days Left`}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr><td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>No upcoming yearly renewals.</td></tr>
+                        )}
+                    </tbody>
+                </table>
             </div>
         </div>
     );
 };
+
 export default YearlyEmails;

@@ -2,7 +2,7 @@
 
 /* --- THEME VARIABLES --- */
 :root {
-    /* Default Dark Mode */
+    /* DARK MODE (Default) */
     --bg-app: #0f172a;
     --bg-sidebar: #1e293b;
     --bg-card: #1e293b;
@@ -12,17 +12,17 @@
     --border: #334155;
     --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
     
-    /* Status/Action Colors */
+    /* COLORS */
     --accent: #38bdf8;       /* Blue */
     --accent-hover: #0ea5e9;
     --danger: #ef4444;       /* Red */
     --success: #10b981;      /* Green */
-    --warning: #f59e0b;      /* Orange/Yellow */
-    --info: #64748b;         /* Grey/Slate */
+    --warning: #f59e0b;      /* Orange */
+    --info: #64748b;         /* Grey */
 }
 
-/* Light Mode Override */
 [data-theme="light"] {
+    /* LIGHT MODE OVERRIDES */
     --bg-app: #f1f5f9;
     --bg-sidebar: #ffffff;
     --bg-card: #ffffff;
@@ -36,29 +36,20 @@
 /* --- GLOBAL RESETS --- */
 body {
     margin: 0;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     background-color: var(--bg-app);
     color: var(--text-main);
     transition: background-color 0.3s, color 0.3s;
 }
-
 * { box-sizing: border-box; }
 
-/* --- MAIN LAYOUT --- */
+/* --- APP LAYOUT (Sidebar + Main) --- */
 .app-root {
     display: flex;
     height: 100vh;
     overflow: hidden;
 }
 
-.main {
-    flex: 1;
-    overflow-y: auto;
-    padding: 30px; /* Restored padding */
-    background-color: var(--bg-app);
-}
-
-/* --- SIDEBAR STYLING (Restored) --- */
 .sidebar {
     width: 260px;
     background-color: var(--bg-sidebar);
@@ -70,18 +61,22 @@ body {
     overflow-y: auto;
 }
 
+.main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 30px;
+    background-color: var(--bg-app);
+}
+
+/* --- SIDEBAR NAVIGATION --- */
 .sidebar h2 {
     color: var(--text-main);
     font-size: 1.5rem;
-    margin-top: 0;
-    margin-bottom: 30px;
-    padding-left: 10px;
+    margin: 0 0 30px 10px;
     letter-spacing: 1px;
 }
 
-.nav-group {
-    margin-bottom: 25px;
-}
+.nav-group { margin-bottom: 25px; }
 
 .nav-label {
     color: var(--text-muted);
@@ -94,33 +89,27 @@ body {
 }
 
 .nav-link {
-    display: flex; /* Aligns icon and text */
-    align-items: center;
-    gap: 10px;
+    display: block;
     padding: 10px 12px;
     color: var(--text-muted);
     text-decoration: none;
     border-radius: 8px;
     font-weight: 500;
-    transition: all 0.2s ease;
     margin-bottom: 4px;
+    transition: all 0.2s ease;
     cursor: pointer;
 }
 
 .nav-link:hover {
-    background-color: rgba(255, 255, 255, 0.05); /* Subtle highlight */
+    background-color: rgba(255, 255, 255, 0.05);
     color: var(--text-main);
     transform: translateX(3px);
 }
-
-/* Light mode specific hover */
-[data-theme="light"] .nav-link:hover {
-    background-color: rgba(0, 0, 0, 0.05);
-}
+[data-theme="light"] .nav-link:hover { background-color: rgba(0,0,0,0.05); }
 
 .nav-link.active {
     background-color: var(--accent);
-    color: #0f172a; /* Dark text on active button for contrast */
+    color: #0f172a; /* Dark text on bright accent */
     font-weight: 600;
 }
 
@@ -152,11 +141,10 @@ body {
     gap: 10px;
 }
 
-/* RESPONSIVE GRID */
+/* Responsive Grid */
 .grid-responsive {
     display: flex;
     gap: 15px;
-    align-items: flex-end;
 }
 
 .grid-cards {
@@ -167,10 +155,10 @@ body {
 }
 
 @media (max-width: 768px) {
-    .app-root { flex-direction: column; }
-    .sidebar { width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border); padding: 10px; }
-    .nav-group { margin-bottom: 10px; } /* Tighter spacing on mobile */
-    .grid-responsive { flex-direction: column; align-items: stretch; }
+    .app-root { flex-direction: column; overflow: auto; }
+    .sidebar { width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    .main { padding: 15px; }
+    .grid-responsive { flex-direction: column; }
     .flex-between { flex-direction: column; align-items: stretch; }
     .hide-mobile { display: none; }
 }
@@ -187,11 +175,13 @@ body {
 
 /* --- TYPOGRAPHY --- */
 h1 { margin: 0 0 20px 0; font-size: 1.8rem; font-weight: 700; color: var(--text-main); }
-h3 { font-size: 1.1rem; color: var(--text-main); margin: 0 0 15px 0; }
-h4 { margin: 0 0 10px 0; color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; }
+h3 { margin: 0 0 15px 0; font-size: 1.2rem; color: var(--text-main); }
+h4 { margin: 0 0 10px 0; font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; }
 .small { font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 4px; }
 
 /* --- FORMS --- */
+label { display: block; margin-bottom: 5px; color: var(--text-muted); font-size: 0.9rem; font-weight: 600; }
+
 .input {
     width: 100%;
     padding: 10px 12px;
@@ -204,8 +194,6 @@ h4 { margin: 0 0 10px 0; color: var(--text-muted); font-size: 0.9rem; text-trans
     transition: border-color 0.2s;
 }
 .input:focus { border-color: var(--accent); }
-
-label { display: block; margin-bottom: 5px; color: var(--text-muted); font-size: 0.85rem; font-weight: 600; }
 
 /* --- BUTTONS --- */
 .button {
@@ -227,22 +215,20 @@ label { display: block; margin-bottom: 5px; color: var(--text-muted); font-size:
 .btn-success { background-color: var(--success); color: white; }
 .btn-warning { background-color: var(--warning); color: black; }
 .btn-secondary { background-color: var(--info); color: white; }
-.btn-sm { padding: 4px 8px; font-size: 0.8rem; }
+.btn-sm { padding: 5px 10px; font-size: 0.8rem; }
 
 /* --- TABLES --- */
 .table-container {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
 }
-
 .table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 600px;
+    min-width: 600px; /* Force scroll on mobile */
 }
-
-.table th { text-align: left; padding: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-.table td { padding: 12px; border-bottom: 1px solid var(--border); color: var(--text-main); font-size: 0.95rem; }
+.table th { text-align: left; padding: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+.table td { padding: 12px; border-bottom: 1px solid var(--border); color: var(--text-main); }
 .table tr:last-child td { border-bottom: none; }
 
 /* --- MODALS --- */

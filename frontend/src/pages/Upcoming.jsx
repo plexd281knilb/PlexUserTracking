@@ -10,8 +10,11 @@ const Upcoming = () => {
             try {
                 const res = await apiGet('/upcoming');
                 setList(res);
-            } catch (e) { console.error(e); } 
-            finally { setLoading(false); }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
         };
         loadData();
     }, []);
@@ -34,7 +37,13 @@ const Upcoming = () => {
             <div className="card table-container">
                 <table className="table">
                     <thead>
-                        <tr><th>User</th><th>Frequency</th><th>Expires On</th><th>Reminder Date</th><th>Status</th></tr>
+                        <tr>
+                            <th>User</th>
+                            <th>Frequency</th>
+                            <th>Expires On</th>
+                            <th>Reminder Date</th>
+                            <th>Status</th>
+                        </tr>
                     </thead>
                     <tbody>
                         {list.length > 0 ? (
@@ -62,7 +71,11 @@ const Upcoming = () => {
                                 </tr>
                             ))
                         ) : (
-                            <tr><td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>No upcoming renewals found.</td></tr>
+                            <tr>
+                                <td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>
+                                    No upcoming renewals found.
+                                </td>
+                            </tr>
                         )}
                     </tbody>
                 </table>
