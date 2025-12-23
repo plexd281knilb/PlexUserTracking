@@ -9,13 +9,9 @@ const PaymentReceipts = () => {
         const loadData = async () => {
             try {
                 const res = await apiGet('/payment_logs');
-                // Only show Matched payments (Receipts)
                 setLogs(res.filter(l => l.status === 'Matched'));
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-            }
+            } catch (e) { console.error(e); } 
+            finally { setLoading(false); }
         };
         loadData();
     }, []);

@@ -9,9 +9,10 @@ import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
 import Upcoming from './pages/Upcoming';
+import Expenses from './pages/Expenses'; // Enabled Real Expenses Page
 
 // Payment Pages
-import Venmo from './pages/Venmo';
+import Venmo from './pages/Venmo'; // Ensure file name matches (Case Sensitive!)
 import Zelle from './pages/Zelle';
 import Paypal from './pages/Paypal';
 
@@ -55,9 +56,7 @@ function App() {
                         <Route path="/emails/receipts" element={<PaymentReceipts />} />
                         
                         <Route path="/settings" element={<Settings />} />
-                        
-                        {/* Placeholder for Expenses */}
-                        <Route path="/expenses" element={<div className="container"><h1>Expenses</h1><p>Coming Soon</p></div>} />
+                        <Route path="/expenses" element={<Expenses />} />
 
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

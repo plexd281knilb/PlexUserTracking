@@ -9,13 +9,9 @@ const MonthlyEmails = () => {
         const loadData = async () => {
             try {
                 const res = await apiGet('/upcoming');
-                // Filter only Monthly users
                 setList(res.filter(u => u.payment_freq === 'Monthly'));
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-            }
+            } catch (e) { console.error(e); } 
+            finally { setLoading(false); }
         };
         loadData();
     }, []);

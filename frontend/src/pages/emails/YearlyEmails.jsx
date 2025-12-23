@@ -9,13 +9,9 @@ const YearlyEmails = () => {
         const loadData = async () => {
             try {
                 const res = await apiGet('/upcoming');
-                // Filter only Yearly users
                 setList(res.filter(u => u.payment_freq === 'Yearly'));
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-            }
+            } catch (e) { console.error(e); } 
+            finally { setLoading(false); }
         };
         loadData();
     }, []);
