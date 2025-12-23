@@ -17,21 +17,18 @@ def get_upcoming():
     upcoming_list = []
 
     for user in users:
-        # Filter: Only Active users who aren't Exempt
         if user.get('payment_freq') == 'Exempt' or user.get('status') == 'Disabled':
             continue
 
         expiry = calculate_expiry(user, settings)
         if not expiry: continue
 
-        # Calculate Warning Date
         days_before = notify_yearly if user['payment_freq'] == 'Yearly' else notify_monthly
         warning_date = expiry - timedelta(days=days_before)
-        
-        # We want to see anyone expiring in the next 60 days
         days_until_expiry = (expiry - today).days
         
-        if -5 <= days_until_expiry <= 60:
+        # Show if expiring in next 60 days OR if overdue
+        if days_until_expiry <= 60:
             upcoming_list.append({
                 "id": user['id'],
                 "username": user['username'],
@@ -43,7 +40,5 @@ def get_upcoming():
                 "payment_freq": user['payment_freq']
             })
 
-    # Sort by who is expiring soonest
     upcoming_list.sort(key=lambda x: x['days_until'])
-    
     return jsonify(upcoming_list)
