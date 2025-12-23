@@ -71,6 +71,10 @@ def load_expenses():
     data = load_data('expenses', [])
     return data if isinstance(data, list) else []
 
+# --- MISSING FUNCTION ADDED HERE ---
+def save_expenses(expenses):
+    save_data('expenses', expenses)
+
 def load_payment_accounts(type_filter=None):
     # CRITICAL FIX: Force list type to prevent 500 crash
     accounts = load_data('payment_accounts', [])
